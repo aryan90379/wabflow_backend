@@ -192,7 +192,11 @@ function resolveConfigValue(value, variables) {
 }
 
 async function executeAction(node, context) {
-  const actionType = node.action?.actionType;
+  const actionAliases = {
+    add_tag: "add_contact_tag",
+    close_chat: "close_conversation",
+  };
+  const actionType = actionAliases[node.action?.actionType] || node.action?.actionType;
   const variables = buildVariables(context);
   const config = resolveConfigValue(node.action?.config || {}, variables);
 

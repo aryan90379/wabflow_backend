@@ -44,7 +44,7 @@ const nodeSchema = new mongoose.Schema(
       fieldKey: { type: String, default: "" },
       saveTo: {
         type: String,
-        enum: ["session", "contact", "lead", "booking"],
+        enum: ["session", "variables", "contact", "lead", "booking"],
         default: "session",
       },
       validation: { type: mongoose.Schema.Types.Mixed, default: {} },
@@ -68,12 +68,14 @@ const nodeSchema = new mongoose.Schema(
         enum: [
           "set_variable",
           "add_contact_tag",
+          "add_tag",
           "remove_contact_tag",
           "create_lead",
           "update_lead",
           "create_booking",
           "update_booking",
           "close_conversation",
+          "close_chat",
         ],
         default: "set_variable",
       },

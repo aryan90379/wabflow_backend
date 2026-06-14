@@ -27,7 +27,19 @@ async function listModel(Model, req, defaultSort = { createdAt: -1 }) {
 
 export async function listLeads(req, res) {
   const result = await listModel(Lead, req);
-  return res.json({ success: true, leads: result.items, pagination: result.pagination });
+  return res.json({
+    success: true,
+    leads: result.items,
+    data: result.items,
+    pagination: result.pagination,
+    ...result.pagination,
+  });
+}
+
+export async function getLead(req, res) {
+  const lead = await Lead.findOne({ _id: req.params.leadId, businessId: req.business._id });
+  if (!lead) return res.status(404).json({ success: false, error: "Lead not found." });
+  return res.json({ success: true, lead, data: lead });
 }
 
 export async function updateLead(req, res) {
@@ -39,12 +51,24 @@ export async function updateLead(req, res) {
     { new: true, runValidators: true }
   );
   if (!lead) return res.status(404).json({ success: false, error: "Lead not found." });
-  return res.json({ success: true, lead });
+  return res.json({ success: true, lead, data: lead });
 }
 
 export async function listBookings(req, res) {
   const result = await listModel(Booking, req);
-  return res.json({ success: true, bookings: result.items, pagination: result.pagination });
+  return res.json({
+    success: true,
+    bookings: result.items,
+    data: result.items,
+    pagination: result.pagination,
+    ...result.pagination,
+  });
+}
+
+export async function getBooking(req, res) {
+  const booking = await Booking.findOne({ _id: req.params.bookingId, businessId: req.business._id });
+  if (!booking) return res.status(404).json({ success: false, error: "Booking not found." });
+  return res.json({ success: true, booking, data: booking });
 }
 
 export async function updateBooking(req, res) {
@@ -56,12 +80,12 @@ export async function updateBooking(req, res) {
     { new: true, runValidators: true }
   );
   if (!booking) return res.status(404).json({ success: false, error: "Booking not found." });
-  return res.json({ success: true, booking });
+  return res.json({ success: true, booking, data: booking });
 }
 
 export async function listFollowUps(req, res) {
   const result = await listModel(FollowUpTask, req, { scheduledAt: 1 });
-  return res.json({ success: true, followUps: result.items, pagination: result.pagination });
+  return res.json({ success: true, followUps: result.items, data: result.items, pagination: result.pagination, ...result.pagination });
 }
 
 export async function createFollowUp(req, res) {
@@ -74,7 +98,7 @@ export async function createFollowUp(req, res) {
     scheduledAt: req.body.scheduledAt,
     businessId: req.business._id,
   });
-  return res.status(201).json({ success: true, followUp });
+  return res.status(201).json({ success: true, followUp, data: followUp });
 }
 
 export async function updateFollowUp(req, res) {
@@ -86,12 +110,12 @@ export async function updateFollowUp(req, res) {
     { new: true, runValidators: true }
   );
   if (!followUp) return res.status(404).json({ success: false, error: "Follow-up not found." });
-  return res.json({ success: true, followUp });
+  return res.json({ success: true, followUp, data: followUp });
 }
 
 export async function listHandoffs(req, res) {
   const result = await listModel(HandoffRequest, req);
-  return res.json({ success: true, handoffs: result.items, pagination: result.pagination });
+  return res.json({ success: true, handoffs: result.items, data: result.items, pagination: result.pagination, ...result.pagination });
 }
 
 export async function updateHandoff(req, res) {
@@ -105,10 +129,10 @@ export async function updateHandoff(req, res) {
     { new: true, runValidators: true }
   );
   if (!handoff) return res.status(404).json({ success: false, error: "Handoff not found." });
-  return res.json({ success: true, handoff });
+  return res.json({ success: true, handoff, data: handoff });
 }
 
 export async function listDecisionLogs(req, res) {
   const result = await listModel(BotDecisionLog, req);
-  return res.json({ success: true, logs: result.items, pagination: result.pagination });
+  return res.json({ success: true, logs: result.items, data: result.items, pagination: result.pagination, ...result.pagination });
 }

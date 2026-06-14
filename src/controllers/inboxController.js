@@ -31,7 +31,17 @@ export async function listConversations(req, res) {
     Conversation.countDocuments(filter),
   ]);
 
-  return res.json({ success: true, conversations, pagination: { page, limit, total } });
+  return res.json({ success: true, conversations, data: conversations, pagination: { page, limit, total }, page, limit, total });
+}
+
+export async function getConversation(req, res) {
+  const conversation = await loadConversation(req);
+  if (!conversation) return res.status(404).json({ success: false, error: "Conversation not found." });
+
+  await conversation.populate("contactId", "name phone waId tags leadStage lastMessageAt");
+  await conversation.populate("whatsappAccountId", "displayPhoneNumber verifiedName phoneNumberId");
+
+  return res.json({ success: true, conversation, data: conversation });
 }
 
 export async function listMessages(req, res) {
@@ -48,7 +58,8 @@ export async function listMessages(req, res) {
     .sort({ createdAt: -1 })
     .limit(limit);
 
-  return res.json({ success: true, messages: messages.reverse() });
+  const data = messages.reverse();
+  return res.json({ success: true, messages: data, data, total: data.length, page: 1, limit });
 }
 
 export async function sendHumanMessage(req, res) {
@@ -86,7 +97,7 @@ export async function sendHumanMessage(req, res) {
     { $set: { status: "assigned", assignedTo: req.userId } }
   );
 
-  return res.status(201).json({ success: true, message });
+  return res.status(201).json({ success: true, message, data: message });
 }
 
 export async function markConversationRead(req, res) {
@@ -120,5 +131,5 @@ export async function updateConversationStatus(req, res) {
   }
 
   await conversation.save();
-  return res.json({ success: true, conversation });
+  return res.json({ success: true, conversation, data: conversation });
 }

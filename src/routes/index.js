@@ -41,6 +41,7 @@ import {
   updateService,
 } from "../controllers/automationController.js";
 import {
+  getConversation,
   listConversations,
   listMessages,
   markConversationRead,
@@ -49,6 +50,8 @@ import {
 } from "../controllers/inboxController.js";
 import {
   createFollowUp,
+  getBooking,
+  getLead,
   listBookings,
   listDecisionLogs,
   listFollowUps,
@@ -104,6 +107,10 @@ businessRouter.get("/automation-rules", asyncHandler(listRules));
 businessRouter.post("/automation-rules", asyncHandler(createRule));
 businessRouter.patch("/automation-rules/:ruleId", asyncHandler(updateRule));
 businessRouter.delete("/automation-rules/:ruleId", asyncHandler(deleteRule));
+businessRouter.get("/rules", asyncHandler(listRules));
+businessRouter.post("/rules", asyncHandler(createRule));
+businessRouter.patch("/rules/:ruleId", asyncHandler(updateRule));
+businessRouter.delete("/rules/:ruleId", asyncHandler(deleteRule));
 
 businessRouter.get("/flows", asyncHandler(listFlows));
 businessRouter.post("/flows", asyncHandler(createFlow));
@@ -113,14 +120,17 @@ businessRouter.post("/flows/:flowId/publish", asyncHandler(publishFlow));
 businessRouter.post("/flows/:flowId/archive", asyncHandler(archiveFlow));
 
 businessRouter.get("/conversations", asyncHandler(listConversations));
+businessRouter.get("/conversations/:conversationId", asyncHandler(getConversation));
 businessRouter.get("/conversations/:conversationId/messages", asyncHandler(listMessages));
 businessRouter.post("/conversations/:conversationId/messages", asyncHandler(sendHumanMessage));
 businessRouter.patch("/conversations/:conversationId/read", asyncHandler(markConversationRead));
 businessRouter.patch("/conversations/:conversationId/status", asyncHandler(updateConversationStatus));
 
 businessRouter.get("/leads", asyncHandler(listLeads));
+businessRouter.get("/leads/:leadId", asyncHandler(getLead));
 businessRouter.patch("/leads/:leadId", asyncHandler(updateLead));
 businessRouter.get("/bookings", asyncHandler(listBookings));
+businessRouter.get("/bookings/:bookingId", asyncHandler(getBooking));
 businessRouter.patch("/bookings/:bookingId", asyncHandler(updateBooking));
 businessRouter.get("/follow-ups", asyncHandler(listFollowUps));
 businessRouter.post("/follow-ups", asyncHandler(createFollowUp));
