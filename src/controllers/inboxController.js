@@ -21,27 +21,50 @@ export async function listConversations(req, res) {
 
   if (req.query.status) filter.status = req.query.status;
 
-  const [conversations, total] = await Promise.all([
+  const [items, total] = await Promise.all([
     Conversation.find(filter)
       .populate("contactId", "name phone waId tags leadStage lastMessageAt")
       .populate("whatsappAccountId", "displayPhoneNumber verifiedName phoneNumberId")
       .sort({ lastMessageAt: -1 })
       .skip((page - 1) * limit)
-      .limit(limit),
+      .limit(limit)
+      .lean(),
     Conversation.countDocuments(filter),
   ]);
+  const conversations = items.map((conversation) => ({
+    ...conversation,
+    contact: conversation.contactId && typeof conversation.contactId === "object"
+      ? conversation.contactId
+      : null,
+    whatsappAccount: conversation.whatsappAccountId && typeof conversation.whatsappAccountId === "object"
+      ? conversation.whatsappAccountId
+      : null,
+  }));
 
   return res.json({ success: true, conversations, data: conversations, pagination: { page, limit, total }, page, limit, total });
 }
 
 export async function getConversation(req, res) {
-  const conversation = await loadConversation(req);
+  const conversation = await Conversation.findOne({
+    _id: req.params.conversationId,
+    businessId: req.business._id,
+  })
+    .populate("contactId", "name phone waId tags leadStage lastMessageAt")
+    .populate("whatsappAccountId", "displayPhoneNumber verifiedName phoneNumberId")
+    .lean();
   if (!conversation) return res.status(404).json({ success: false, error: "Conversation not found." });
 
-  await conversation.populate("contactId", "name phone waId tags leadStage lastMessageAt");
-  await conversation.populate("whatsappAccountId", "displayPhoneNumber verifiedName phoneNumberId");
+  const item = {
+    ...conversation,
+    contact: conversation.contactId && typeof conversation.contactId === "object"
+      ? conversation.contactId
+      : null,
+    whatsappAccount: conversation.whatsappAccountId && typeof conversation.whatsappAccountId === "object"
+      ? conversation.whatsappAccountId
+      : null,
+  };
 
-  return res.json({ success: true, conversation, data: conversation });
+  return res.json({ success: true, conversation: item, data: item });
 }
 
 export async function listMessages(req, res) {

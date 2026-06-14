@@ -1,6 +1,7 @@
 import {
   Lead,
   Booking,
+  Message,
   FollowUpTask,
   HandoffRequest,
   BotDecisionLog,
@@ -12,34 +13,67 @@ function pagination(req) {
   return { page, limit, skip: (page - 1) * limit };
 }
 
-async function listModel(Model, req, defaultSort = { createdAt: -1 }) {
+async function listModel(Model, req, defaultSort = { createdAt: -1 }, populate = []) {
   const { page, limit, skip } = pagination(req);
   const filter = { businessId: req.business._id };
   if (req.query.status) filter.status = req.query.status;
 
+  const query = Model.find(filter).sort(defaultSort).skip(skip).limit(limit);
+  for (const item of populate) query.populate(item);
+
   const [items, total] = await Promise.all([
-    Model.find(filter).sort(defaultSort).skip(skip).limit(limit),
+    query.lean(),
     Model.countDocuments(filter),
   ]);
 
   return { items, pagination: { page, limit, total } };
 }
 
+async function attachRecentMessages(items = []) {
+  return Promise.all(items.map(async (item) => {
+    const messages = item.conversationId?._id || item.conversationId
+      ? await Message.find({ conversationId: item.conversationId?._id || item.conversationId })
+        .sort({ createdAt: -1 })
+        .limit(10)
+        .select("direction senderType type text interactive createdAt")
+        .lean()
+      : [];
+
+    const contact = item.contactId && typeof item.contactId === "object" ? item.contactId : null;
+    const conversation = item.conversationId && typeof item.conversationId === "object" ? item.conversationId : null;
+
+    return {
+      ...item,
+      contact,
+      conversation,
+      recentMessages: messages.reverse(),
+    };
+  }));
+}
+
 export async function listLeads(req, res) {
-  const result = await listModel(Lead, req);
+  const result = await listModel(Lead, req, { createdAt: -1 }, [
+    { path: "contactId", select: "name phone waId tags leadStage notes customFields" },
+    { path: "conversationId", select: "status lastMessage lastMessageAt unreadCount botState" },
+  ]);
+  const items = await attachRecentMessages(result.items);
   return res.json({
     success: true,
-    leads: result.items,
-    data: result.items,
+    leads: items,
+    data: items,
     pagination: result.pagination,
     ...result.pagination,
   });
 }
 
 export async function getLead(req, res) {
-  const lead = await Lead.findOne({ _id: req.params.leadId, businessId: req.business._id });
+  const lead = await Lead.findOne({ _id: req.params.leadId, businessId: req.business._id })
+    .populate("contactId", "name phone waId tags leadStage notes customFields")
+    .populate("conversationId", "status lastMessage lastMessageAt unreadCount botState")
+    .lean();
   if (!lead) return res.status(404).json({ success: false, error: "Lead not found." });
-  return res.json({ success: true, lead, data: lead });
+  const [item] = await attachRecentMessages([lead]);
+  return res.json({ success: true, lead: item, data: item });
 }
 
 export async function updateLead(req, res) {
@@ -55,20 +89,30 @@ export async function updateLead(req, res) {
 }
 
 export async function listBookings(req, res) {
-  const result = await listModel(Booking, req);
+  const result = await listModel(Booking, req, { createdAt: -1 }, [
+    { path: "contactId", select: "name phone waId tags leadStage notes customFields" },
+    { path: "conversationId", select: "status lastMessage lastMessageAt unreadCount botState" },
+    { path: "serviceItemId", select: "name description price durationMinutes" },
+  ]);
+  const items = await attachRecentMessages(result.items);
   return res.json({
     success: true,
-    bookings: result.items,
-    data: result.items,
+    bookings: items,
+    data: items,
     pagination: result.pagination,
     ...result.pagination,
   });
 }
 
 export async function getBooking(req, res) {
-  const booking = await Booking.findOne({ _id: req.params.bookingId, businessId: req.business._id });
+  const booking = await Booking.findOne({ _id: req.params.bookingId, businessId: req.business._id })
+    .populate("contactId", "name phone waId tags leadStage notes customFields")
+    .populate("conversationId", "status lastMessage lastMessageAt unreadCount botState")
+    .populate("serviceItemId", "name description price durationMinutes")
+    .lean();
   if (!booking) return res.status(404).json({ success: false, error: "Booking not found." });
-  return res.json({ success: true, booking, data: booking });
+  const [item] = await attachRecentMessages([booking]);
+  return res.json({ success: true, booking: item, data: item });
 }
 
 export async function updateBooking(req, res) {

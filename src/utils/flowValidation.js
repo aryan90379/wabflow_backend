@@ -45,8 +45,15 @@ export function validateFlowDefinition(flowData, { mode = "draft" } = {}) {
         }
 
         if (step.config?.buttons) {
-          if (step.config.buttons.length > 3) {
-            addError("TOO_MANY_BUTTONS", "WhatsApp supports at most 3 reply buttons in this message.", { stepId });
+          const maxOptions = step.config?.messageType === "list" ? 10 : 3;
+          if (step.config.buttons.length > maxOptions) {
+            addError(
+              step.config?.messageType === "list" ? "TOO_MANY_LIST_OPTIONS" : "TOO_MANY_BUTTONS",
+              step.config?.messageType === "list"
+                ? "WhatsApp lists support at most 10 options in this message."
+                : "WhatsApp supports at most 3 reply buttons in this message.",
+              { stepId }
+            );
           }
 
           const labels = new Set();

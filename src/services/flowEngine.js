@@ -300,7 +300,15 @@ async function processWaitingInput(flow, context) {
     return true;
   }
 
-  await saveAnswer(context, awaiting, result.value);
+  const variables = {
+    ...buildVariables(context),
+    answer: result.value,
+  };
+  const valueToSave = step.config?.valueTemplate
+    ? interpolate(step.config.valueTemplate, variables)
+    : result.value;
+
+  await saveAnswer(context, awaiting, valueToSave);
   context.conversation.botState.awaitingInput = null;
   context.conversation.botState.currentNodeId = optionNextNodeId || awaiting.nextNodeId || node.nextNodeId || null;
   return false;
