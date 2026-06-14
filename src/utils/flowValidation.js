@@ -69,7 +69,7 @@ export function validateFlowDefinition(flowData, { mode = "draft" } = {}) {
             }
             if (normalizedLabel) labels.add(normalizedLabel);
 
-            if (button.action?.type === "go_to_step") {
+            if (button.action?.targetStepId) {
               checkReference(button.action.targetStepId, `Button '${button.label || button.id}'`, stepId);
               if (button.action.targetStepId && stepSet.has(button.action.targetStepId)) {
                 adjacency.get(stepId)?.push(button.action.targetStepId);
@@ -305,4 +305,3 @@ export function validateFlowDefinition(flowData, { mode = "draft" } = {}) {
     return errors;
   }
 }
-
