@@ -37,6 +37,8 @@ function normalizeFlowPayload(body = {}) {
             : node.action,
         }))
       : body.nodes,
+    steps: body.steps,
+    entryStepId: body.entryStepId,
   };
 }
 
@@ -141,7 +143,10 @@ export async function createFlow(req, res) {
     trigger: body.trigger || { type: "manual" },
     startNodeId: body.startNodeId,
     nodes: body.nodes,
+    entryStepId: body.entryStepId,
+    steps: body.steps,
     status: "draft",
+    version: body.steps && body.steps.length > 0 ? 2 : 1,
   });
 
   return res.status(201).json({ success: true, flow, data: flow });
@@ -152,15 +157,24 @@ export async function updateFlow(req, res) {
   if (!flow) return res.status(404).json({ success: false, error: "Flow not found." });
 
   const body = normalizeFlowPayload(req.body);
-  const next = {
+  
+  const isV2 = body.steps && body.steps.length > 0;
+  
+  const next = isV2 ? {
+    entryStepId: body.entryStepId ?? flow.entryStepId,
+    steps: body.steps ?? flow.steps,
+    version: flow.version >= 2 ? flow.version : 2
+  } : {
     startNodeId: body.startNodeId ?? flow.startNodeId,
     nodes: body.nodes ?? flow.nodes.map((node) => node.toObject()),
+    version: flow.version
   };
-  const errors = validateFlowDefinition(next);
+
+  const errors = validateFlowDefinition({ ...flow.toObject(), ...next });
   if (errors.length) return res.status(400).json({ success: false, error: "Invalid flow.", details: errors });
 
   flow.set(cleanUpdate(body, ["status", "version", "publishedAt", "publishedBy"]));
-  flow.version += 1;
+  flow.version = next.version > flow.version ? next.version : flow.version + 1;
   await flow.save();
 
   return res.json({ success: true, flow, data: flow });
@@ -170,7 +184,7 @@ export async function publishFlow(req, res) {
   const flow = await findOwned(AutomationFlow, req, "flowId");
   if (!flow) return res.status(404).json({ success: false, error: "Flow not found." });
 
-  const errors = validateFlowDefinition(flow.toObject());
+  const errors = validateFlowDefinition(flow.toObject(), { mode: "publish" });
   if (errors.length) return res.status(400).json({ success: false, error: "Invalid flow.", details: errors });
 
   const shouldBeDefault = req.body.isDefault ?? flow.isDefault;

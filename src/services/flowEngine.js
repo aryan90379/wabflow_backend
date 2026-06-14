@@ -245,6 +245,8 @@ async function executeAction(node, context) {
 }
 
 async function processWaitingInput(flow, context) {
+  if (flow.version >= 2) return processWaitingInputV2(flow, context);
+
   const awaiting = context.conversation.botState.awaitingInput;
   if (!awaiting) return false;
 
@@ -279,7 +281,46 @@ async function processWaitingInput(flow, context) {
   return false;
 }
 
+async function processWaitingInputV2(flow, context) {
+  const awaiting = context.conversation.botState.awaitingInput;
+  if (!awaiting) return false;
+
+  const step = flow.steps?.find((item) => item.id === awaiting.nodeId);
+  if (!step) throw new Error(`Waiting step ${awaiting.nodeId} no longer exists in flow.`);
+
+  let rawValue = context.event?.selectionTitle || context.event?.text || "";
+  let optionNextNodeId = "";
+  
+  // For V2, buttons might be in step.config.buttons
+  if (context.event?.selectionId && step.config?.buttons?.length) {
+    const button = step.config.buttons.find((item) => item.id === context.event.selectionId);
+    if (button) {
+      rawValue = button.value ?? button.label;
+      optionNextNodeId = button.action?.targetStepId || "";
+    }
+  }
+
+  const result = validateAnswer(rawValue, awaiting.validation || {});
+  if (!result.valid) {
+    await sendAndSaveMessage({
+      account: context.account,
+      contact: context.contact,
+      conversation: context.conversation,
+      response: { type: "text", text: step.config?.retryText || "Please enter a valid value." },
+      senderType: "bot",
+    });
+    return true;
+  }
+
+  await saveAnswer(context, awaiting, result.value);
+  context.conversation.botState.awaitingInput = null;
+  context.conversation.botState.currentNodeId = optionNextNodeId || awaiting.nextNodeId || step.config?.nextStepId || null;
+  return false;
+}
+
 async function processOptionSelection(flow, context) {
+  if (flow.version >= 2) return processOptionSelectionV2(flow, context);
+
   const selectionId = context.event?.selectionId;
   if (!selectionId || !context.conversation.botState.currentNodeId) return false;
 
@@ -294,12 +335,39 @@ async function processOptionSelection(flow, context) {
   return true;
 }
 
+async function processOptionSelectionV2(flow, context) {
+  const selectionId = context.event?.selectionId;
+  if (!selectionId || !context.conversation.botState.currentNodeId) return false;
+
+  const step = flow.steps?.find((item) => item.id === context.conversation.botState.currentNodeId);
+  if (!step || !step.config?.buttons) return false;
+
+  const button = step.config.buttons.find((item) => item.id === selectionId);
+  if (!button) return false;
+
+  context.conversation.botState.variables.set(`${step.id}_selectionId`, button.id);
+  context.conversation.botState.variables.set(`${step.id}_selectionTitle`, button.label);
+  context.conversation.botState.variables.set(`${step.id}_value`, button.value ?? button.label);
+  
+  if (button.action?.type === "go_to_step") {
+    context.conversation.botState.currentNodeId = button.action.targetStepId || step.config?.nextStepId || null;
+  } else if (button.action?.type === "end_conversation") {
+    context.conversation.botState.currentNodeId = null; // Let the next cycle close it
+    context.conversation.status = "closed";
+    context.conversation.botState.active = false;
+  } else {
+    context.conversation.botState.currentNodeId = step.config?.nextStepId || null;
+  }
+  
+  return true;
+}
+
 export async function startFlow({ flow, business, account, contact, conversation, event }) {
   conversation.status = "bot_handling";
   conversation.botState.active = true;
   conversation.botState.flowId = flow._id;
   conversation.botState.flowVersion = flow.version;
-  conversation.botState.currentNodeId = flow.startNodeId;
+  conversation.botState.currentNodeId = flow.version >= 2 ? flow.entryStepId : flow.startNodeId;
   conversation.botState.awaitingInput = null;
   conversation.botState.variables = new Map();
   conversation.botState.startedAt = new Date();
@@ -329,6 +397,8 @@ export async function continueActiveFlow({ business, account, contact, conversat
 }
 
 export async function continueFlow({ flow, business, account, contact, conversation, event }) {
+  if (flow.version >= 2) return continueFlowV2({ flow, business, account, contact, conversation, event });
+
   const context = { flow, business, account, contact, conversation, event };
 
   const waitingHandled = await processWaitingInput(flow, context);
@@ -438,6 +508,142 @@ export async function continueFlow({ flow, business, account, contact, conversat
           contact,
           conversation,
           response: renderResponse(node.response, variables),
+          senderType: "bot",
+        });
+      }
+      conversation.botState.active = false;
+      conversation.botState.currentNodeId = null;
+      conversation.botState.awaitingInput = null;
+      conversation.status = "open";
+      break;
+    }
+  }
+
+  conversation.botState.updatedAt = new Date();
+  await conversation.save();
+  return { handled: true, action: "continued_flow", flow };
+}
+
+export async function continueFlowV2({ flow, business, account, contact, conversation, event }) {
+  const context = { flow, business, account, contact, conversation, event };
+
+  const waitingHandled = await processWaitingInputV2(flow, context);
+  if (waitingHandled) {
+    conversation.botState.updatedAt = new Date();
+    await conversation.save();
+    return { handled: true, action: "asked_question", flow };
+  }
+
+  await processOptionSelectionV2(flow, context);
+
+  for (let i = 0; i < MAX_NODE_STEPS; i += 1) {
+    const currentNodeId = conversation.botState.currentNodeId;
+
+    if (!currentNodeId) {
+      conversation.botState.active = false;
+      conversation.status = conversation.status === "human_needed" ? "human_needed" : "open";
+      break;
+    }
+
+    const step = flow.steps?.find((item) => item.id === currentNodeId);
+    if (!step) throw new Error(`Flow step ${currentNodeId} was not found.`);
+
+    const variables = buildVariables(context);
+
+    if (step.type === "message" || step.type === "question") {
+      const config = step.config || {};
+      const response = renderResponse({
+        type: config.messageType || "text",
+        text: config.text,
+        header: config.header,
+        footer: config.footer,
+        mediaUrl: config.mediaUrl,
+        filename: config.filename,
+        options: (config.buttons || []).map(b => ({
+            id: b.id,
+            title: b.label,
+        }))
+      }, variables);
+      
+      await sendAndSaveMessage({ account, contact, conversation, response, senderType: "bot" });
+
+      if (step.type === "question") {
+        conversation.botState.currentNodeId = step.id;
+        conversation.botState.awaitingInput = {
+          nodeId: step.id,
+          fieldKey: config.fieldKey,
+          saveTo: config.saveTo || "session",
+          validation: config.validation || {},
+          nextNodeId: config.nextStepId || "",
+        };
+        conversation.botState.updatedAt = new Date();
+        await conversation.save();
+        return { handled: true, action: "asked_question", flow };
+      }
+
+      if (config.buttons?.length) {
+        conversation.botState.currentNodeId = step.id;
+        conversation.botState.updatedAt = new Date();
+        await conversation.save();
+        return { handled: true, action: "sent_reply", flow };
+      }
+
+      conversation.botState.currentNodeId = config.nextStepId || null;
+      continue;
+    }
+
+    if (step.type === "booking") {
+        // Simple initial pass: if booking node reached, mark as awaiting booking input or just notify it's a wizard.
+        // Actually, in the simplest form, we ask for their requirement and save.
+        // But for full compatibility with the wizard, the engine will handle booking steps as a series of questions if we unroll it,
+        // or we just save a requested booking and pass to human for now if we haven't built the conversational wizard unrolling in the engine.
+        // The prompt says: "The booking branch can lead to another message or end."
+        // We will create a requested booking right away based on current context.
+        const config = step.config || {};
+        await getOrCreateBooking(context, { status: "requested", type: "appointment" });
+        
+        const response = renderResponse({
+            type: "text",
+            text: config.confirmation?.message || "Thanks, your booking request has been received.",
+        }, variables);
+        await sendAndSaveMessage({ account, contact, conversation, response, senderType: "bot" });
+        
+        conversation.botState.currentNodeId = config.nextStepId || null;
+        continue;
+    }
+
+    if (step.type === "action") {
+      // similar to V1 action node
+      const actionNodeEquivalent = {
+          action: {
+              actionType: step.config?.actionType,
+              config: step.config?.payload
+          }
+      };
+      await executeAction(actionNodeEquivalent, context);
+      conversation.botState.currentNodeId = step.config?.nextStepId || null;
+      continue;
+    }
+
+    if (step.type === "handoff") {
+      await createHandoff({
+        business,
+        contact,
+        conversation,
+        account,
+        reason: step.config?.reason || "flow_requested_handoff",
+        message: interpolate(step.config?.message || business.settings?.handoffMessage || "A team member will reply here shortly.", variables),
+      });
+      return { handled: true, action: "handoff", flow };
+    }
+
+    if (step.type === "end") {
+      if (step.config?.text) {
+        await sendAndSaveMessage({
+          account,
+          contact,
+          conversation,
+          response: renderResponse({ type: "text", text: step.config.text }, variables),
           senderType: "bot",
         });
       }
