@@ -103,6 +103,13 @@ export function validateFlowDefinition(flowData, { mode = "draft" } = {}) {
         }
       }
 
+      if (step.type === "action") {
+        if (step.config?.nextStepId) {
+          checkReference(step.config.nextStepId, `Action next step`, stepId);
+          if (stepSet.has(step.config.nextStepId)) adjacency.get(stepId)?.push(step.config.nextStepId);
+        }
+      }
+
       if (step.type === "handoff") {
         // Handoff is usually terminal
       }
