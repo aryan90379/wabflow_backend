@@ -5,17 +5,15 @@ function parseMessage(message, value, entryId) {
   let selectionTitle = "";
   let media = {};
 
-  if (type === "text") text = message.text?.body || "";
-
-  if (type === "interactive") {
+  if (type === "text") {
+    text = message.text?.body || "";
+  } else if (type === "interactive") {
     const reply = message.interactive?.button_reply || message.interactive?.list_reply || {};
     selectionId = reply.id || "";
     selectionTitle = reply.title || "";
     text = selectionTitle;
     type = message.interactive?.button_reply ? "button" : "list";
-  }
-
-  if (type === "button") {
+  } else if (type === "button") {
     selectionId = message.button?.payload || "";
     selectionTitle = message.button?.text || "";
     text = selectionTitle;
