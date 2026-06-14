@@ -552,14 +552,15 @@ export async function continueFlowV2({ flow, business, account, contact, convers
 
     if (step.type === "message" || step.type === "question") {
       const config = step.config || {};
+      const buttons = config.buttons || [];
       const response = renderResponse({
-        type: config.messageType || "text",
+        type: config.messageType || (buttons.length ? "buttons" : "text"),
         text: config.text,
         header: config.header,
         footer: config.footer,
         mediaUrl: config.mediaUrl,
         filename: config.filename,
-        options: (config.buttons || []).map(b => ({
+        options: buttons.map(b => ({
             id: b.id,
             title: b.label,
         }))
