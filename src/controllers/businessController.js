@@ -20,7 +20,7 @@ export async function createBusiness(req, res) {
     await AutomationFlow.create({
       businessId: business._id,
       name: "Welcome Assistant",
-      status: "draft",
+      status: "published",
       isDefault: true,
       version: 2,
       trigger: { type: "any_message" },
