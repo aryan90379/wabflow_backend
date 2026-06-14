@@ -151,13 +151,6 @@ export async function updateFlow(req, res) {
   const flow = await findOwned(AutomationFlow, req, "flowId");
   if (!flow) return res.status(404).json({ success: false, error: "Flow not found." });
 
-  if (flow.status === "published") {
-    return res.status(409).json({
-      success: false,
-      error: "Published flows are immutable. Create a new draft version before editing.",
-    });
-  }
-
   const body = normalizeFlowPayload(req.body);
   const next = {
     startNodeId: body.startNodeId ?? flow.startNodeId,
@@ -167,7 +160,6 @@ export async function updateFlow(req, res) {
   if (errors.length) return res.status(400).json({ success: false, error: "Invalid flow.", details: errors });
 
   flow.set(cleanUpdate(body, ["status", "version", "publishedAt", "publishedBy"]));
-  flow.status = "draft";
   flow.version += 1;
   await flow.save();
 
