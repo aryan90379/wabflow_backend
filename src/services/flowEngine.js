@@ -368,7 +368,7 @@ async function processOptionSelectionV2(flow, context) {
   context.conversation.botState.variables.set(`${step.id}_selectionTitle`, button.label);
   context.conversation.botState.variables.set(`${step.id}_value`, button.value ?? button.label);
   
-  if (button.action?.type === "go_to_step") {
+  if (button.action?.targetStepId) {
     context.conversation.botState.currentNodeId = button.action.targetStepId || step.config?.nextStepId || null;
   } else if (button.action?.type === "end_conversation") {
     context.conversation.botState.currentNodeId = null; // Let the next cycle close it
