@@ -201,11 +201,11 @@ export async function updateFlow(req, res) {
   
   const isV2 = body.steps && body.steps.length > 0;
   
-  const next = isV2 ? {
+  const next = isV2 ? pruneFlowToReachableSteps({
     entryStepId: body.entryStepId ?? flow.entryStepId,
     steps: body.steps ?? flow.steps,
     version: flow.version >= 2 ? flow.version : 2
-  } : {
+  }) : {
     startNodeId: body.startNodeId ?? flow.startNodeId,
     nodes: body.nodes ?? flow.nodes.map((node) => node.toObject()),
     version: flow.version
@@ -214,7 +214,7 @@ export async function updateFlow(req, res) {
   const errors = validateFlowDefinition({ ...flow.toObject(), ...next });
   if (errors.length) return res.status(400).json({ success: false, error: "Invalid flow.", details: errors });
 
-  flow.set(cleanUpdate(body, ["status", "version", "publishedAt", "publishedBy"]));
+  flow.set(cleanUpdate({ ...body, ...next }, ["status", "version", "publishedAt", "publishedBy"]));
   flow.version = next.version > flow.version ? next.version : flow.version + 1;
   await flow.save();
 

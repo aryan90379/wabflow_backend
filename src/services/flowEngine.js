@@ -66,6 +66,27 @@ function renderResponse(response, variables) {
   };
 }
 
+function getSelectionText(event) {
+  return normalizeText(event?.selectionTitle || event?.text || "");
+}
+
+function findSelectedOption(options = [], event = {}, labelKey = "title") {
+  const selectionId = event?.selectionId || "";
+  const selectionText = getSelectionText(event);
+
+  if (!selectionId && !selectionText) return null;
+
+  return options.find((option) => {
+    const label = option?.[labelKey] ?? option?.title ?? option?.label ?? "";
+    const value = option?.value ?? "";
+    return (
+      (selectionId && option?.id === selectionId) ||
+      (selectionText && normalizeText(label) === selectionText) ||
+      (selectionText && value && normalizeText(value) === selectionText)
+    );
+  }) || null;
+}
+
 function validateAnswer(rawValue, validation = {}) {
   const value = String(rawValue ?? "").trim();
 
@@ -255,8 +276,8 @@ async function processWaitingInput(flow, context) {
 
   let rawValue = context.event?.selectionTitle || context.event?.text || "";
   let optionNextNodeId = "";
-  if (context.event?.selectionId && node.response?.options?.length) {
-    const option = node.response.options.find((item) => item.id === context.event.selectionId);
+  if (node.response?.options?.length) {
+    const option = findSelectedOption(node.response.options, context.event, "title");
     if (option) {
       rawValue = option.value ?? option.title;
       optionNextNodeId = option.nextNodeId || "";
@@ -292,8 +313,8 @@ async function processWaitingInputV2(flow, context) {
   let optionNextNodeId = "";
   
   // For V2, buttons might be in step.config.buttons
-  if (context.event?.selectionId && step.config?.buttons?.length) {
-    const button = step.config.buttons.find((item) => item.id === context.event.selectionId);
+  if (step.config?.buttons?.length) {
+    const button = findSelectedOption(step.config.buttons, context.event, "label");
     if (button) {
       rawValue = button.value ?? button.label;
       optionNextNodeId = button.action?.targetStepId || "";
@@ -321,11 +342,10 @@ async function processWaitingInputV2(flow, context) {
 async function processOptionSelection(flow, context) {
   if (flow.version >= 2) return processOptionSelectionV2(flow, context);
 
-  const selectionId = context.event?.selectionId;
-  if (!selectionId || !context.conversation.botState.currentNodeId) return false;
+  if (!context.conversation.botState.currentNodeId) return false;
 
   const node = flow.nodes.find((item) => item.nodeId === context.conversation.botState.currentNodeId);
-  const option = node?.response?.options?.find((item) => item.id === selectionId);
+  const option = findSelectedOption(node?.response?.options || [], context.event, "title");
   if (!option) return false;
 
   context.conversation.botState.variables.set(`${node.nodeId}_selectionId`, option.id);
@@ -336,13 +356,12 @@ async function processOptionSelection(flow, context) {
 }
 
 async function processOptionSelectionV2(flow, context) {
-  const selectionId = context.event?.selectionId;
-  if (!selectionId || !context.conversation.botState.currentNodeId) return false;
+  if (!context.conversation.botState.currentNodeId) return false;
 
   const step = flow.steps?.find((item) => item.id === context.conversation.botState.currentNodeId);
   if (!step || !step.config?.buttons) return false;
 
-  const button = step.config.buttons.find((item) => item.id === selectionId);
+  const button = findSelectedOption(step.config.buttons, context.event, "label");
   if (!button) return false;
 
   context.conversation.botState.variables.set(`${step.id}_selectionId`, button.id);
