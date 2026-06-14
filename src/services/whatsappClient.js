@@ -1,94 +1,397 @@
-import axios from "axios";
+import { env } from "../config/env.js";
+import { WhatsappAccount } from "../models/WhatsappAccount.js";
+import { decryptSecret } from "../utils/crypto.js";
 
-// 🔥 CONFIG (use your actual values)
-const ACCESS_TOKEN = "EAAUe1tlJoVUBRF6qnZBbduZBEfMiyvXZCeFul8HFNcII0uVK2ZA7a0QZAfmqzR9TQ91SRBbTy0dLFoDMzXupPZCT7qZC47WK8Q6i20sjLhWuWT6RRmtPYtSiqJvfEB013BDFWFTNw2mqS2WMgnZCnY6GwooxppzaBEprKmZAvX7ZAiFhMUZBblw4RZB8wDLgn1lI6aBBGfhiqwPAWZCN4vM9NNGCMUGmwsw8DJ5KtLAxWtbqu9PZBfdm8PdZAbK2FdGyWOTZASn9cgpMkqxN5PZCwe75TWWjQ03RNMtWbqPSXSuIo6LlBUjm7SqD17u0M6TKKfmNeVQHoLyZCsLUKNtBRS1SrZAo1E3QoD3orHZAU77oypdvPNhHlhbLTn5yX5OBRYj9PoVrNpZCl2QWx6Eu2IFlAZBah0dEkmjxQzaHkXjwOZCG2LPAWaWeZCTcUZBe0uzcpDeZBltnYUl3aWE3wABAZDZD"; 
-const PHONE_NUMBER_ID = "1075003295693657";
+const GRAPH_BASE =
+  `https://graph.facebook.com/${
+    env.metaGraphVersion || "v21.0"
+  }`;
 
-const URL = `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`;
+async function parseMetaResponse(response) {
+  const raw = await response.text();
 
-const HEADERS = {
-  Authorization: `Bearer ${ACCESS_TOKEN}`,
-  "Content-Type": "application/json",
-};
+  let data = {};
 
-// ✅ TEXT MESSAGE
-export async function sendTextMessage(to, text) {
   try {
-    const res = await axios.post(
-      URL,
-      {
-        messaging_product: "whatsapp",
+    data = raw ? JSON.parse(raw) : {};
+  } catch {
+    data = {
+      raw,
+    };
+  }
+
+  if (!response.ok || data?.error) {
+    const metaError = data?.error || {};
+
+    const error = new Error(
+      metaError.message ||
+        `Meta request failed with status ${response.status}`
+    );
+
+    error.status = response.status;
+
+    error.meta = {
+      code: metaError.code,
+      subcode:
+        metaError.error_subcode,
+      type: metaError.type,
+      fbtraceId:
+        metaError.fbtrace_id,
+    };
+
+    throw error;
+  }
+
+  return data;
+}
+
+export async function getWhatsappAccountWithToken(
+  accountId
+) {
+  if (!accountId) {
+    throw new Error(
+      "WhatsApp account ID is required."
+    );
+  }
+
+  /*
+   * These fields are select:false in the model,
+   * so they must be explicitly selected here.
+   */
+  const account =
+    await WhatsappAccount.findOne({
+      _id: accountId,
+      status: "active",
+    }).select(
+      "+encryptedValue +encryptionIv +encryptionTag"
+    );
+
+  if (!account) {
+    throw new Error(
+      "Active WhatsApp account not found."
+    );
+  }
+
+  if (
+    !account.encryptedValue ||
+    !account.encryptionIv ||
+    !account.encryptionTag
+  ) {
+    throw new Error(
+      `WhatsApp account ${account._id} does not contain a complete encrypted access token.`
+    );
+  }
+
+  const accessToken = decryptSecret({
+    encryptedValue:
+      account.encryptedValue,
+
+    encryptionIv:
+      account.encryptionIv,
+
+    encryptionTag:
+      account.encryptionTag,
+  });
+
+  return {
+    account,
+    accessToken,
+  };
+}
+
+export async function sendWhatsappPayload(
+  accountId,
+  payload
+) {
+  if (
+    !payload ||
+    typeof payload !== "object"
+  ) {
+    throw new Error(
+      "WhatsApp payload is required."
+    );
+  }
+
+  const {
+    account,
+    accessToken,
+  } = await getWhatsappAccountWithToken(
+    accountId
+  );
+
+  const response = await fetch(
+    `${GRAPH_BASE}/${account.phoneNumberId}/messages`,
+    {
+      method: "POST",
+      headers: {
+        Authorization:
+          `Bearer ${accessToken}`,
+
+        "Content-Type":
+          "application/json",
+      },
+      body: JSON.stringify({
+        messaging_product:
+          "whatsapp",
+        ...payload,
+      }),
+    }
+  );
+
+  return parseMetaResponse(response);
+}
+
+function sanitizeOptions(
+  options = [],
+  limit = 3
+) {
+  return options
+    .slice(0, limit)
+    .map((option, index) => ({
+      id: String(
+        option.id ||
+          `option_${index + 1}`
+      ).slice(0, 200),
+
+      title: String(
+        option.title ||
+          `Option ${index + 1}`
+      ).slice(0, 20),
+
+      description: String(
+        option.description || ""
+      ).slice(0, 72),
+    }));
+}
+
+export function buildWhatsappPayload(
+  to,
+  response
+) {
+  if (!to) {
+    throw new Error(
+      "WhatsApp recipient is required."
+    );
+  }
+
+  const configuredResponse =
+    response || {};
+
+  const type =
+    configuredResponse.type ||
+    "text";
+
+  if (type === "buttons") {
+    const options = sanitizeOptions(
+      configuredResponse.options,
+      3
+    );
+
+    if (!options.length) {
+      return {
         to,
         type: "text",
-        text: { body: text },
-      },
-      { headers: HEADERS }
-    );
+        text: {
+          body: String(
+            configuredResponse.text ||
+              "Choose an option"
+          ),
+        },
+      };
+    }
 
-    return res.data;
-  } catch (err) {
-    console.error("sendTextMessage error:", err.response?.data || err.message);
-    throw err;
-  }
-}
+    return {
+      to,
+      type: "interactive",
+      interactive: {
+        type: "button",
 
-// ✅ BUTTONS
-export async function sendInteractiveButtons(to, text, buttons) {
-  try {
-    const safeButtons = buttons.slice(0, 3).map((b) => ({
-      type: "reply",
-      reply: {
-        id: b.reply.id,
-        title: b.reply.title.slice(0, 20),
-      },
-    }));
+        ...(configuredResponse.header
+          ? {
+              header: {
+                type: "text",
+                text: String(
+                  configuredResponse.header
+                ).slice(0, 60),
+              },
+            }
+          : {}),
 
-    const res = await axios.post(
-      URL,
-      {
-        messaging_product: "whatsapp",
-        to,
-        type: "interactive",
-        interactive: {
-          type: "button",
-          body: { text },
-          action: { buttons: safeButtons },
+        body: {
+          text: String(
+            configuredResponse.text ||
+              "Choose an option"
+          ).slice(0, 1024),
+        },
+
+        ...(configuredResponse.footer
+          ? {
+              footer: {
+                text: String(
+                  configuredResponse.footer
+                ).slice(0, 60),
+              },
+            }
+          : {}),
+
+        action: {
+          buttons: options.map(
+            (option) => ({
+              type: "reply",
+              reply: {
+                id: option.id,
+                title: option.title,
+              },
+            })
+          ),
         },
       },
-      { headers: HEADERS }
+    };
+  }
+
+  if (type === "list") {
+    const options = sanitizeOptions(
+      configuredResponse.options,
+      100
     );
 
-    return res.data;
-  } catch (err) {
-    console.error("sendInteractiveButtons error:", err.response?.data || err.message);
-    throw err;
-  }
-}
+    const rows = options
+      .slice(0, 10)
+      .map((option) => ({
+        id: option.id,
+        title: option.title,
 
-// ✅ LIST
-export async function sendInteractiveList(to, text, buttonText, sections) {
-  try {
-    const res = await axios.post(
-      URL,
-      {
-        messaging_product: "whatsapp",
+        ...(option.description
+          ? {
+              description:
+                option.description,
+            }
+          : {}),
+      }));
+
+    if (!rows.length) {
+      return {
         to,
-        type: "interactive",
-        interactive: {
-          type: "list",
-          body: { text },
-          action: {
-            button: buttonText,
-            sections,
-          },
+        type: "text",
+        text: {
+          body: String(
+            configuredResponse.text ||
+              "No options are available."
+          ),
+        },
+      };
+    }
+
+    return {
+      to,
+      type: "interactive",
+      interactive: {
+        type: "list",
+
+        ...(configuredResponse.header
+          ? {
+              header: {
+                type: "text",
+                text: String(
+                  configuredResponse.header
+                ).slice(0, 60),
+              },
+            }
+          : {}),
+
+        body: {
+          text: String(
+            configuredResponse.text ||
+              "Choose an option"
+          ).slice(0, 1024),
+        },
+
+        ...(configuredResponse.footer
+          ? {
+              footer: {
+                text: String(
+                  configuredResponse.footer
+                ).slice(0, 60),
+              },
+            }
+          : {}),
+
+        action: {
+          button: String(
+            configuredResponse.buttonText ||
+              "View options"
+          ).slice(0, 20),
+
+          sections: [
+            {
+              title: "Options",
+              rows,
+            },
+          ],
         },
       },
-      { headers: HEADERS }
-    );
-
-    return res.data;
-  } catch (err) {
-    console.error("sendInteractiveList error:", err.response?.data || err.message);
-    throw err;
+    };
   }
+
+  if (
+    ["image", "video", "document"].includes(
+      type
+    )
+  ) {
+    if (!configuredResponse.mediaUrl) {
+      throw new Error(
+        `mediaUrl is required for WhatsApp ${type} messages.`
+      );
+    }
+
+    return {
+      to,
+      type,
+
+      [type]: {
+        link:
+          configuredResponse.mediaUrl,
+
+        ...(configuredResponse.text
+          ? {
+              caption: String(
+                configuredResponse.text
+              ).slice(0, 1024),
+            }
+          : {}),
+
+        ...(type === "document" &&
+        configuredResponse.filename
+          ? {
+              filename:
+                configuredResponse.filename,
+            }
+          : {}),
+      },
+    };
+  }
+
+  return {
+    to,
+    type: "text",
+    text: {
+      body: String(
+        configuredResponse.text || ""
+      ),
+    },
+  };
+}
+
+export async function sendConfiguredWhatsappResponse(
+  accountId,
+  to,
+  response
+) {
+  return sendWhatsappPayload(
+    accountId,
+    buildWhatsappPayload(
+      to,
+      response
+    )
+  );
 }

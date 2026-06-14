@@ -1,0 +1,143 @@
+{
+  "name": "Generic Business Assistant",
+  "description": "Starter flow with pricing, booking collection and human handoff.",
+  "isDefault": true,
+  "trigger": {
+    "type": "first_message",
+    "keywords": [],
+    "matchMode": "any"
+  },
+  "startNodeId": "welcome",
+  "nodes": [
+    {
+      "nodeId": "welcome",
+      "name": "Welcome menu",
+      "type": "message",
+      "response": {
+        "type": "buttons",
+        "text": "Hi {{contact.name}} 👋 How can {{business.name}} help you today?",
+        "footer": "Choose one option",
+        "options": [
+          { "id": "view_prices", "title": "View prices", "nextNodeId": "pricing" },
+          { "id": "make_booking", "title": "Book now", "nextNodeId": "ask_service" },
+          { "id": "talk_human", "title": "Talk to human", "nextNodeId": "human" }
+        ]
+      }
+    },
+    {
+      "nodeId": "pricing",
+      "name": "Pricing response",
+      "type": "message",
+      "response": {
+        "type": "text",
+        "text": "Our pricing depends on the service you choose. Reply with the service name, or type *human* for assistance."
+      },
+      "nextNodeId": "finish"
+    },
+    {
+      "nodeId": "ask_service",
+      "name": "Collect requirement",
+      "type": "question",
+      "response": {
+        "type": "list",
+        "text": "Which service are you interested in?",
+        "buttonText": "Choose service",
+        "options": [
+          { "id": "service_one", "title": "Service One", "value": "Service One" },
+          { "id": "service_two", "title": "Service Two", "value": "Service Two" },
+          { "id": "service_other", "title": "Other", "value": "Other" }
+        ]
+      },
+      "question": {
+        "fieldKey": "requirement",
+        "saveTo": "lead",
+        "validation": { "required": true },
+        "retryText": "Please choose a service."
+      },
+      "nextNodeId": "ask_date"
+    },
+    {
+      "nodeId": "ask_date",
+      "name": "Collect preferred date",
+      "type": "question",
+      "response": {
+        "type": "text",
+        "text": "What date do you prefer? Please use YYYY-MM-DD."
+      },
+      "question": {
+        "fieldKey": "startDate",
+        "saveTo": "booking",
+        "validation": { "required": true, "type": "date" },
+        "retryText": "Please enter the date as YYYY-MM-DD."
+      },
+      "nextNodeId": "ask_time"
+    },
+    {
+      "nodeId": "ask_time",
+      "name": "Collect preferred time",
+      "type": "question",
+      "response": {
+        "type": "text",
+        "text": "What time do you prefer? Example: 04:30 PM"
+      },
+      "question": {
+        "fieldKey": "startTime",
+        "saveTo": "booking",
+        "validation": {
+          "required": true,
+          "regex": "^(0?[1-9]|1[0-2]):[0-5][0-9]\\s?(AM|PM)$",
+          "flags": "i"
+        },
+        "retryText": "Please enter a valid time, for example 04:30 PM."
+      },
+      "nextNodeId": "tag_lead"
+    },
+    {
+      "nodeId": "tag_lead",
+      "name": "Mark as hot lead",
+      "type": "action",
+      "action": {
+        "actionType": "add_contact_tag",
+        "config": { "tag": "hot_lead" }
+      },
+      "nextNodeId": "update_lead"
+    },
+    {
+      "nodeId": "update_lead",
+      "name": "Update lead",
+      "type": "action",
+      "action": {
+        "actionType": "update_lead",
+        "config": {
+          "intent": "booking",
+          "score": 75,
+          "status": "interested"
+        }
+      },
+      "nextNodeId": "confirmation"
+    },
+    {
+      "nodeId": "confirmation",
+      "name": "Booking confirmation",
+      "type": "end",
+      "response": {
+        "type": "text",
+        "text": "Thanks! Your request for {{requirement}} on {{startDate}} at {{startTime}} has been recorded. Our team will confirm it here."
+      }
+    },
+    {
+      "nodeId": "human",
+      "name": "Human handoff",
+      "type": "handoff",
+      "handoff": {
+        "reason": "customer_selected_human",
+        "message": "Sure — a team member will reply here shortly."
+      }
+    },
+    {
+      "nodeId": "finish",
+      "name": "End",
+      "type": "end"
+    }
+  ]
+}

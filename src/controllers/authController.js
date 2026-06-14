@@ -1,146 +1,258 @@
-import { OAuth2Client } from 'google-auth-library';
-import jwt from 'jsonwebtoken';
-import appleSignin from 'apple-signin-auth'; 
-import { User } from '../models/User.js'; // 👈 Pointing to your new single User model
+import { OAuth2Client } from "google-auth-library";
+import appleSignin from "apple-signin-auth";
+import jwt from "jsonwebtoken";
+import crypto from "crypto";
 
-const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+import { User } from "../models/User.js";
+import { env } from "../config/env.js";
 
-// --- 1. GOOGLE AUTH ---
-export const googleAuth = async (req, res) => {
-  const { idToken } = req.body;
+const googleClient = new OAuth2Client();
 
-  if (!idToken) {
-    return res.status(400).json({ error: "idToken is required." });
-  }
+function createAppToken(user) {
+  return jwt.sign(
+    {
+      userId: String(user._id),
+      email: user.email || null,
+      authProvider: user.appleId ? "apple" : user.googleId ? "google" : "unknown",
+    },
+    env.jwtSecret(),
+    { expiresIn: "30d" }
+  );
+}
 
+function makeFallbackAppleEmail(appleId) {
+  const hash = crypto
+    .createHash("sha256")
+    .update(String(appleId))
+    .digest("hex")
+    .slice(0, 24);
+
+  return `apple_${hash}@apple-user.wabflow.local`;
+}
+
+function cleanName(...parts) {
+  return parts
+    .filter(Boolean)
+    .map((p) => String(p).trim())
+    .filter(Boolean)
+    .join(" ");
+}
+
+export async function googleAuth(req, res) {
   try {
+    const { idToken } = req.body;
+
+    if (!idToken) {
+      return res.status(400).json({
+        success: false,
+        error: "idToken is required.",
+      });
+    }
+
+    if (!env.googleClientIds.length) {
+      return res.status(500).json({
+        success: false,
+        error: "Google client ID is not configured.",
+      });
+    }
+
     const ticket = await googleClient.verifyIdToken({
       idToken,
-      audience: process.env.GOOGLE_CLIENT_ID,
+      audience: env.googleClientIds,
     });
+
     const payload = ticket.getPayload();
-    const { sub: googleId, email, name, picture, email_verified } = payload; 
+    const googleId = payload?.sub;
+    const email = String(payload?.email || "").toLowerCase();
 
-    if (!email_verified) {
-      return res.status(400).json({ error: "Google account email is not verified." });
-    }
-
-    // Look for existing user
-    let user = await User.findOne({ email });
-
-    if (user) {
-      // Update existing user with latest Google info
-      user.googleId = googleId;
-      user.name = name || user.name;
-      user.profilepic = picture || user.profilepic;
-      await user.save();
-    } else {
-      // Create new doctor user
-      user = new User({
-        googleId,
-        email,
-        name,
-        profilepic: picture,
+    if (!payload?.email_verified || !email || !googleId) {
+      return res.status(400).json({
+        success: false,
+        error: "Verified Google email is required.",
       });
-      await user.save();
     }
 
-    // Generate token (No roles anymore!)
-    const appToken = jwt.sign(
-      { _id: user._id, email: user.email },
-      process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET,
-      { expiresIn: '30d' }
-    );
-
-    res.status(200).json({
-      success: true,
-      token: appToken,
-      user: user.toObject(),
+    let user = await User.findOne({
+      $or: [{ googleId }, { email }],
     });
-
-  } catch (err) {
-    console.error("❌ Google auth error:", err);
-    res.status(500).json({ error: "Authentication failed." });
-  }
-};
-
-// --- 2. APPLE AUTH ---
-export const appleAuth = async (req, res) => {
-  const { identityToken, email, firstName, lastName } = req.body;
-
-  if (!identityToken) {
-    return res.status(400).json({ error: "Identity token is required." });
-  }
-
-  try {
-    // A. Verify Apple Token
-    const appleIdTokenClaims = await appleSignin.verifyIdToken(identityToken, {
-      ignoreExpiration: true, 
-    });
-
-    const { email: tokenEmail, sub: appleUserId } = appleIdTokenClaims;
-    const finalEmail = tokenEmail || email;
-
-    // We reuse the googleId field for Apple Sub ID to keep the schema simple
-    let user = await User.findOne({ googleId: appleUserId }); 
 
     if (!user) {
-        if (!finalEmail) {
-            return res.status(400).json({ 
-                error: "Email missing. Please revoke Apple Sign-in permissions and try again." 
-            });
-        }
-
-        // Check if email exists to link accounts
-        const existingUser = await User.findOne({ email: finalEmail });
-        
-        if (existingUser) {
-            existingUser.googleId = appleUserId;
-            await existingUser.save();
-            user = existingUser;
-        } else {
-            // Create New User
-            const name = (firstName && lastName) ? `${firstName} ${lastName}` : "Apple User";
-            user = new User({
-                googleId: appleUserId, 
-                email: finalEmail,
-                name: name,
-                profilepic: "https://upload.wikimedia.org/wikipedia/commons/thumb/3/31/Apple_logo_white.svg/1010px-Apple_logo_white.svg.png", 
-            });
-            await user.save();
-        }
+      user = await User.create({
+        googleId,
+        email,
+        name: payload.name || "",
+        profilepic: payload.picture || "",
+        lastLoginAt: new Date(),
+      });
+    } else {
+      user.googleId = googleId;
+      user.email = user.email || email;
+      user.name = payload.name || user.name;
+      user.profilepic = payload.picture || user.profilepic;
+      user.lastLoginAt = new Date();
+      await user.save();
     }
 
-    // C. Generate Token
-    const appToken = jwt.sign(
-      { _id: user._id, email: user.email },
-      process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET,
-      { expiresIn: '30d' }
-    );
-
-    res.status(200).json({
+    return res.json({
       success: true,
-      token: appToken,
-      user: user.toObject(),
+      token: createAppToken(user),
+      user,
+    });
+  } catch (error) {
+    console.error("❌ Google auth error:", {
+      message: error.message,
+      name: error.name,
     });
 
-  } catch (err) {
-    console.error("❌ Apple auth error:", err);
-    res.status(500).json({ error: "Apple authentication failed." });
+    return res.status(500).json({
+      success: false,
+      error: "Google authentication failed.",
+    });
   }
-};
+}
 
-// --- 3. CHECK EMAIL ---
-export const checkEmail = async (req, res) => {
-  const { email } = req.body;
-  if (!email) return res.status(400).json({ error: "Email is required." });
-
+export async function appleAuth(req, res) {
   try {
-    const user = await User.findOne({ email });
-    // Stripped out all role logic, just returns if they exist
-    return res.json({ exists: !!user });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Server error" });
+    const { identityToken, email, firstName, lastName, fullName } = req.body;
+
+    if (!identityToken) {
+      return res.status(400).json({
+        success: false,
+        error: "identityToken is required.",
+      });
+    }
+
+    if (!env.appleClientId) {
+      return res.status(500).json({
+        success: false,
+        error: "APPLE_CLIENT_ID is not configured.",
+      });
+    }
+
+    const claims = await appleSignin.verifyIdToken(identityToken, {
+      audience: env.appleClientId,
+      ignoreExpiration: false,
+    });
+
+    const appleId = claims?.sub;
+
+    if (!appleId) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid Apple token.",
+      });
+    }
+
+    let finalEmail = String(claims.email || email || "").trim().toLowerCase();
+
+    if (!finalEmail) {
+      finalEmail = makeFallbackAppleEmail(appleId);
+    }
+
+    const suppliedName =
+      cleanName(firstName, lastName) ||
+      cleanName(fullName?.givenName, fullName?.familyName);
+
+    let user = await User.findOne({ appleId });
+
+    if (!user) {
+      user = await User.findOne({ email: finalEmail });
+
+      if (user) {
+        user.appleId = appleId;
+        if (suppliedName && !user.name) user.name = suppliedName;
+        user.lastLoginAt = new Date();
+        await user.save();
+      } else {
+        user = await User.create({
+          appleId,
+          email: finalEmail,
+          name: suppliedName || "Apple User",
+          lastLoginAt: new Date(),
+        });
+      }
+    } else {
+      if (!user.email) user.email = finalEmail;
+      if (suppliedName && !user.name) user.name = suppliedName;
+      user.lastLoginAt = new Date();
+      await user.save();
+    }
+
+    console.log("✅ Apple auth success", {
+      userId: String(user._id),
+      hasRealEmail: Boolean(claims.email || email),
+      audience: claims.aud,
+    });
+
+    return res.json({
+      success: true,
+      token: createAppToken(user),
+      user,
+    });
+  } catch (error) {
+    console.error("❌ Apple auth error:", {
+      message: error.message,
+      name: error.name,
+      expectedAudience: env.appleClientId || null,
+      bodyKeys: Object.keys(req.body || {}),
+      hasIdentityToken: Boolean(req.body?.identityToken),
+    });
+
+    return res.status(401).json({
+      success: false,
+      error: "Apple authentication failed.",
+    });
   }
-};
+}
+
+export async function checkEmail(req, res) {
+  try {
+    const email = String(req.body.email || "").trim().toLowerCase();
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error: "Email is required.",
+      });
+    }
+
+    const exists = Boolean(await User.exists({ email }));
+
+    return res.json({
+      success: true,
+      exists,
+    });
+  } catch (error) {
+    console.error("❌ Check email error:", error);
+
+    return res.status(500).json({
+      success: false,
+      error: "Server error.",
+    });
+  }
+}
+
+export async function getMe(req, res) {
+  try {
+    const user = await User.findById(req.userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: "User not found.",
+      });
+    }
+
+    return res.json({
+      success: true,
+      user,
+    });
+  } catch (error) {
+    console.error("❌ Get me error:", error);
+
+    return res.status(500).json({
+      success: false,
+      error: "Server error.",
+    });
+  }
+}

@@ -1,0 +1,28 @@
+import { app } from "./app.js";
+import { connectDatabase } from "./config/db.js";
+import { env } from "./config/env.js";
+import { startFollowUpWorker } from "./services/followUpWorker.js";
+
+async function start() {
+  await connectDatabase();
+
+  const server = app.listen(env.port, () => {
+    console.log(`[server] WabFlow API listening on port ${env.port}`);
+  });
+
+  const followUpTimer = startFollowUpWorker();
+
+  const shutdown = (signal) => {
+    console.log(`[server] ${signal} received, shutting down`);
+    clearInterval(followUpTimer);
+    server.close(() => process.exit(0));
+  };
+
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
+}
+
+start().catch((error) => {
+  console.error("[server] Startup failed", error);
+  process.exit(1);
+});

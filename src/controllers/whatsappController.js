@@ -1,66 +1,115 @@
-import { User } from "../models/User.js";
+import { env } from "../config/env.js";
+import { WhatsappAccount } from "../models/WhatsappAccount.js";
+import { encryptSecret } from "../utils/crypto.js";
 
-const GRAPH_VERSION = process.env.META_GRAPH_VERSION || "v19.0";
-const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_VERSION}`;
-const WHATSAPP_PIN = process.env.WHATSAPP_2FA_PIN || "123456";
+const GRAPH_BASE =
+  `https://graph.facebook.com/${
+    env.metaGraphVersion || "v21.0"
+  }`;
 
 const safe = (value) => {
-  if (!value) return "";
+  if (!value) {
+    return "";
+  }
+
   const str = String(value);
-  if (str.length <= 12) return "***";
-  return `${str.slice(0, 6)}...${str.slice(-4)}`;
+
+  return str.length <= 12
+    ? "***"
+    : `${str.slice(0, 6)}...${str.slice(-4)}`;
 };
 
-const buildUrl = (path, params = {}) => {
-  const cleanPath = path.startsWith("/") ? path : `/${path}`;
-  const url = new URL(`${GRAPH_BASE}${cleanPath}`);
+const buildUrl = (
+  path,
+  params = {}
+) => {
+  const url = new URL(
+    `${GRAPH_BASE}${
+      path.startsWith("/")
+        ? path
+        : `/${path}`
+    }`
+  );
 
-  for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== null && value !== "") {
-      url.searchParams.set(key, String(value));
+  for (
+    const [key, value]
+    of Object.entries(params)
+  ) {
+    if (
+      value !== undefined &&
+      value !== null &&
+      value !== ""
+    ) {
+      url.searchParams.set(
+        key,
+        String(value)
+      );
     }
   }
 
   return url.toString();
 };
 
-const readJson = async (res, label = "Meta API") => {
-  const raw = await res.text();
+async function readJson(
+  response,
+  label
+) {
+  const raw = await response.text();
 
   let data = {};
+
   try {
-    data = raw ? JSON.parse(raw) : {};
+    data = raw
+      ? JSON.parse(raw)
+      : {};
   } catch {
-    data = { raw };
+    data = {
+      raw,
+    };
   }
 
-  if (!res.ok || data?.error) {
-    const metaError = data?.error || {};
-    const err = new Error(
-      metaError.message || raw || `${label} failed with status ${res.status}`
+  if (
+    !response.ok ||
+    data?.error
+  ) {
+    const metaError =
+      data?.error || {};
+
+    const error = new Error(
+      metaError.message ||
+        `${label} failed with status ${response.status}`
     );
 
-    err.status = res.status;
-    err.meta = {
+    error.status =
+      response.status;
+
+    error.meta = {
       label,
       code: metaError.code,
-      subcode: metaError.error_subcode,
+      subcode:
+        metaError.error_subcode,
       type: metaError.type,
-      fbtrace_id: metaError.fbtrace_id,
+      fbtraceId:
+        metaError.fbtrace_id,
     };
 
-    throw err;
+    throw error;
   }
 
   return data;
-};
+}
 
-const graphGet = async (path, accessToken, params = {}, label = "Graph GET") => {
+const graphGet = async (
+  path,
+  token,
+  params = {},
+  label = "Graph GET"
+) => {
   return readJson(
     await fetch(
       buildUrl(path, {
         ...params,
-        access_token: accessToken,
+        access_token: token,
       })
     ),
     label
@@ -69,367 +118,783 @@ const graphGet = async (path, accessToken, params = {}, label = "Graph GET") => 
 
 const graphPost = async (
   path,
-  accessToken,
+  token,
   body = {},
   label = "Graph POST"
 ) => {
   return readJson(
-    await fetch(buildUrl(path), {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-    }),
+    await fetch(
+      buildUrl(path),
+      {
+        method: "POST",
+        headers: {
+          Authorization:
+            `Bearer ${token}`,
+
+          "Content-Type":
+            "application/json",
+        },
+        body:
+          JSON.stringify(body),
+      }
+    ),
     label
   );
 };
 
-const getScopeTargets = (debugData, scopeName) => {
-  const scopes = debugData?.data?.granular_scopes || [];
-  const found = scopes.find((s) => s.scope === scopeName);
-  return found?.target_ids || [];
-};
+function scopeTargets(
+  debugData,
+  scopeName
+) {
+  const scope =
+    (
+      debugData?.data
+        ?.granular_scopes || []
+    ).find(
+      (item) =>
+        item.scope === scopeName
+    );
 
-const exchangeCodeWithBlankRedirectUri = async ({
-  appId,
-  appSecret,
+  return scope?.target_ids || [];
+}
+
+async function exchangeCode(
   code,
-  flowId,
-}) => {
-  /**
-   * IMPORTANT:
-   * Your frontend uses Facebook JS SDK FB.login({ response_type: "code" }).
-   * For this flow Meta expects redirect_uri to be exactly blank during code exchange.
-   *
-   * Do NOT use buildUrl() here because buildUrl() intentionally removes empty strings.
-   */
-  const tokenUrl = new URL(`${GRAPH_BASE}/oauth/access_token`);
-  tokenUrl.searchParams.set("client_id", appId);
-  tokenUrl.searchParams.set("client_secret", appSecret);
-  tokenUrl.searchParams.set("redirect_uri", "");
-  tokenUrl.searchParams.set("code", code);
+  redirectUri = ""
+) {
+  const tokenUrl = new URL(
+    `${GRAPH_BASE}/oauth/access_token`
+  );
 
-  console.log(`[${flowId}] Exchanging auth code`, {
-    redirectUriMode: "blank",
-    urlHasRedirectUri: tokenUrl.toString().includes("redirect_uri="),
-  });
+  tokenUrl.searchParams.set(
+    "client_id",
+    env.metaAppId
+  );
 
-  return readJson(await fetch(tokenUrl.toString()), "Exchange auth code");
-};
+  tokenUrl.searchParams.set(
+    "client_secret",
+    env.metaAppSecret
+  );
 
-export const connectWhatsApp = async (req, res) => {
-  const flowId = `wa_${Date.now()}`;
+  tokenUrl.searchParams.set(
+    "redirect_uri",
+    redirectUri
+  );
 
-  console.log(`\n[${flowId}] WhatsApp connect started`);
+  tokenUrl.searchParams.set(
+    "code",
+    code
+  );
+
+  return readJson(
+    await fetch(tokenUrl),
+    "Exchange authorization code"
+  );
+}
+
+async function exchangeLongLivedToken(
+  shortToken
+) {
+  return readJson(
+    await fetch(
+      buildUrl(
+        "/oauth/access_token",
+        {
+          grant_type:
+            "fb_exchange_token",
+
+          client_id:
+            env.metaAppId,
+
+          client_secret:
+            env.metaAppSecret,
+
+          fb_exchange_token:
+            shortToken,
+        }
+      )
+    ),
+    "Exchange long-lived token"
+  );
+}
+
+async function resolveWabaId({
+  debugData,
+  accessToken,
+  suppliedWabaId,
+}) {
+  if (suppliedWabaId) {
+    return String(
+      suppliedWabaId
+    );
+  }
+
+  const directTargets =
+    scopeTargets(
+      debugData,
+      "whatsapp_business_management"
+    );
+
+  if (directTargets.length) {
+    return String(
+      directTargets[0]
+    );
+  }
+
+  const businessTargets =
+    scopeTargets(
+      debugData,
+      "business_management"
+    );
+
+  for (
+    const metaBusinessId
+    of businessTargets
+  ) {
+    for (const edge of [
+      "owned_whatsapp_business_accounts",
+      "client_whatsapp_business_accounts",
+    ]) {
+      try {
+        const result =
+          await graphGet(
+            `/${metaBusinessId}/${edge}`,
+            accessToken,
+            {
+              fields: "id,name",
+            },
+            `Fetch ${edge}`
+          );
+
+        if (
+          result?.data?.[0]?.id
+        ) {
+          return String(
+            result.data[0].id
+          );
+        }
+      } catch (error) {
+        console.warn(
+          "[wa-connect] WABA edge skipped",
+          {
+            metaBusinessId,
+            edge,
+            error:
+              error.message,
+          }
+        );
+      }
+    }
+  }
+
+  return null;
+}
+
+function getTokenExpiry(
+  shortTokenData,
+  longTokenData
+) {
+  const expiresIn =
+    longTokenData?.expires_in ||
+    shortTokenData?.expires_in;
+
+  if (!expiresIn) {
+    return null;
+  }
+
+  const seconds =
+    Number(expiresIn);
+
+  if (
+    !Number.isFinite(seconds) ||
+    seconds <= 0
+  ) {
+    return null;
+  }
+
+  return new Date(
+    Date.now() +
+      seconds * 1000
+  );
+}
+
+export async function connectWhatsApp(
+  req,
+  res
+) {
+  const flowId =
+    `wa_${Date.now()}`;
 
   try {
-    const code = req.body?.code;
+    const code =
+      req.body.code;
+
+    const redirectUri =
+      req.body.redirectUri ||
+      req.body.redirect_uri ||
+      "";
 
     let wabaId =
-      req.body?.wabaId ||
-      req.body?.waba_id ||
-      req.body?.whatsappBusinessAccountId ||
+      req.body.wabaId ||
+      req.body.waba_id ||
+      req.body
+        .whatsappBusinessAccountId ||
       null;
 
     let phoneNumberId =
-      req.body?.phoneNumberId ||
-      req.body?.phone_number_id ||
-      req.body?.businessPhoneNumberId ||
+      req.body.phoneNumberId ||
+      req.body.phone_number_id ||
+      req.body
+        .businessPhoneNumberId ||
       null;
 
     if (!code) {
-      return res.status(400).json({
-        success: false,
-        error: "Missing Meta authorization code",
-      });
+      return res
+        .status(400)
+        .json({
+          success: false,
+          error:
+            "Meta authorization code is required.",
+        });
     }
 
-    const appId = process.env.META_APP_ID;
-    const appSecret = process.env.META_APP_SECRET;
-
-    if (!appId || !appSecret) {
-      return res.status(500).json({
-        success: false,
-        error: "Missing META_APP_ID or META_APP_SECRET",
-      });
+    if (
+      !env.metaAppId ||
+      !env.metaAppSecret
+    ) {
+      return res
+        .status(500)
+        .json({
+          success: false,
+          error:
+            "META_APP_ID and META_APP_SECRET are required.",
+        });
     }
 
-    console.log(`[${flowId}] Input`, {
-      hasCode: Boolean(code),
-      wabaId: wabaId || null,
-      phoneNumberId: phoneNumberId || null,
-      metaRedirectUriEnv: process.env.META_REDIRECT_URI || "blank",
-    });
-
-    // 1. Exchange authorization code for access token.
-    // Must include redirect_uri= blank for your JS SDK flow.
-    const tokenData = await exchangeCodeWithBlankRedirectUri({
-      appId,
-      appSecret,
-      code,
-      flowId,
-    });
-
-    console.log(`[${flowId}] Short token received`, {
-      token: safe(tokenData.access_token),
-    });
-
-    // 2. Upgrade short token to long-lived token.
-    const longTokenData = await readJson(
-      await fetch(
-        buildUrl("/oauth/access_token", {
-          grant_type: "fb_exchange_token",
-          client_id: appId,
-          client_secret: appSecret,
-          fb_exchange_token: tokenData.access_token,
-        })
-      ),
-      "Exchange long-lived token"
+    console.log(
+      `[${flowId}] WhatsApp connection started`,
+      {
+        businessId: String(
+          req.business._id
+        ),
+        wabaId,
+        phoneNumberId,
+        redirectUri:
+          redirectUri ||
+          "(blank)",
+      }
     );
 
-    const accessToken = longTokenData.access_token || tokenData.access_token;
-
-    console.log(`[${flowId}] Long token ready`, {
-      token: safe(accessToken),
-      expiresIn: longTokenData.expires_in || null,
-    });
-
-    // 3. Debug token.
-    const debugData = await readJson(
-      await fetch(
-        buildUrl("/debug_token", {
-          input_token: accessToken,
-          access_token: `${appId}|${appSecret}`,
-        })
-      ),
-      "Debug token"
-    );
-
-    const scopes = debugData?.data?.granular_scopes || [];
-
-    console.log(`[${flowId}] Token debug`, {
-      appId: debugData?.data?.app_id,
-      isValid: debugData?.data?.is_valid,
-      scopes: scopes.map((s) => ({
-        scope: s.scope,
-        targets: s.target_ids || [],
-      })),
-    });
-
-    // 4. Prefer WABA from frontend Embedded Signup.
-    if (!wabaId) {
-      const wabaTargets = getScopeTargets(
-        debugData,
-        "whatsapp_business_management"
+    const shortTokenData =
+      await exchangeCode(
+        code,
+        redirectUri
       );
 
-      if (wabaTargets.length) {
-        wabaId = wabaTargets[0];
-        console.log(`[${flowId}] WABA found from granular scope`, { wabaId });
-      }
+    if (
+      !shortTokenData
+        ?.access_token
+    ) {
+      throw new Error(
+        "Meta did not return an access token."
+      );
     }
 
-    // 5. Last-resort fallback through Business object edges.
-    // Never use /me/whatsapp_business_accounts.
-    if (!wabaId) {
-      const businessTargets = getScopeTargets(debugData, "business_management");
+    let longTokenData = {};
 
-      for (const businessId of businessTargets) {
-        try {
-          const owned = await graphGet(
-            `/${businessId}/owned_whatsapp_business_accounts`,
-            accessToken,
-            { fields: "id,name" },
-            "Fetch owned WABAs"
-          );
-
-          if (owned?.data?.length) {
-            wabaId = owned.data[0].id;
-            console.log(`[${flowId}] WABA found from owned edge`, {
-              businessId,
-              wabaId,
-            });
-            break;
-          }
-        } catch (err) {
-          console.warn(`[${flowId}] owned WABA lookup skipped`, {
-            businessId,
-            error: err.message,
-            meta: err.meta || null,
-          });
+    try {
+      longTokenData =
+        await exchangeLongLivedToken(
+          shortTokenData
+            .access_token
+        );
+    } catch (error) {
+      console.warn(
+        `[${flowId}] Long-lived token exchange skipped`,
+        {
+          error:
+            error.message,
+          meta:
+            error.meta ||
+            null,
         }
-
-        try {
-          const client = await graphGet(
-            `/${businessId}/client_whatsapp_business_accounts`,
-            accessToken,
-            { fields: "id,name" },
-            "Fetch client WABAs"
-          );
-
-          if (client?.data?.length) {
-            wabaId = client.data[0].id;
-            console.log(`[${flowId}] WABA found from client edge`, {
-              businessId,
-              wabaId,
-            });
-            break;
-          }
-        } catch (err) {
-          console.warn(`[${flowId}] client WABA lookup skipped`, {
-            businessId,
-            error: err.message,
-            meta: err.meta || null,
-          });
-        }
-      }
+      );
     }
+
+    const accessToken =
+      longTokenData
+        .access_token ||
+      shortTokenData
+        .access_token;
+
+    console.log(
+      `[${flowId}] Token ready`,
+      {
+        token:
+          safe(accessToken),
+      }
+    );
+
+    const debugData =
+      await readJson(
+        await fetch(
+          buildUrl(
+            "/debug_token",
+            {
+              input_token:
+                accessToken,
+
+              access_token:
+                `${env.metaAppId}|${env.metaAppSecret}`,
+            }
+          )
+        ),
+        "Debug token"
+      );
+
+    if (
+      !debugData?.data
+        ?.is_valid
+    ) {
+      throw new Error(
+        "Meta returned an invalid access token."
+      );
+    }
+
+    wabaId =
+      await resolveWabaId({
+        debugData,
+        accessToken,
+        suppliedWabaId:
+          wabaId,
+      });
 
     if (!wabaId) {
       throw new Error(
-        "Missing WABA ID. Embedded Signup did not return waba_id, and token debug did not contain a usable WABA target."
+        "Could not resolve a WhatsApp Business Account ID."
       );
     }
 
-    console.log(`[${flowId}] Using WABA`, { wabaId });
-
-    // 6. Get phone details.
-    let selectedPhone = null;
+    let selectedPhone;
 
     if (phoneNumberId) {
-      selectedPhone = await graphGet(
-        `/${phoneNumberId}`,
-        accessToken,
-        { fields: "id,display_phone_number,verified_name" },
-        "Fetch selected phone"
-      );
-
-      console.log(`[${flowId}] Phone fetched from frontend phoneNumberId`, {
-        phoneNumberId: selectedPhone.id,
-        displayPhoneNumber: selectedPhone.display_phone_number,
-      });
-    } else {
-      const phoneData = await graphGet(
-        `/${wabaId}/phone_numbers`,
-        accessToken,
-        { fields: "id,display_phone_number,verified_name" },
-        "Fetch WABA phone numbers"
-      );
-
-      console.log(`[${flowId}] Phones found`, {
-        count: phoneData?.data?.length || 0,
-      });
+      phoneNumberId =
+        String(phoneNumberId);
 
       selectedPhone =
-        phoneData?.data?.find((p) =>
-          String(p.display_phone_number || "").startsWith("+91")
-        ) || phoneData?.data?.[0];
+        await graphGet(
+          `/${phoneNumberId}`,
+          accessToken,
+          {
+            fields:
+              "id,display_phone_number,verified_name",
+          },
+          "Fetch selected phone"
+        );
+    } else {
+      const phones =
+        await graphGet(
+          `/${wabaId}/phone_numbers`,
+          accessToken,
+          {
+            fields:
+              "id,display_phone_number,verified_name",
+          },
+          "Fetch WABA phone numbers"
+        );
 
-      phoneNumberId = selectedPhone?.id || null;
+      selectedPhone =
+        phones?.data?.[0];
+
+      phoneNumberId =
+        selectedPhone?.id
+          ? String(
+              selectedPhone.id
+            )
+          : null;
     }
 
-    if (!selectedPhone?.id || !phoneNumberId) {
-      throw new Error("No WhatsApp phone number found for this WABA");
+    if (
+      !selectedPhone?.id ||
+      !phoneNumberId
+    ) {
+      throw new Error(
+        "No WhatsApp phone number was found."
+      );
     }
 
-    console.log(`[${flowId}] Selected phone`, {
-      phoneNumberId,
-      displayPhoneNumber: selectedPhone.display_phone_number,
-      verifiedName: selectedPhone.verified_name || null,
-    });
+    const linkedElsewhere =
+      await WhatsappAccount.findOne({
+        phoneNumberId,
+        businessId: {
+          $ne:
+            req.business._id,
+        },
+        status: "active",
+      });
 
-    // 7. Register phone number.
-    let registerData = null;
+    if (linkedElsewhere) {
+      return res
+        .status(409)
+        .json({
+          success: false,
+          error:
+            "This WhatsApp number is already connected to another business.",
+        });
+    }
 
     try {
-      registerData = await graphPost(
+      await graphPost(
         `/${phoneNumberId}/register`,
         accessToken,
         {
-          messaging_product: "whatsapp",
-          pin: WHATSAPP_PIN,
+          messaging_product:
+            "whatsapp",
+
+          pin:
+            env.whatsappPin ||
+            "123456",
         },
         "Register phone number"
       );
+    } catch (error) {
+      const message =
+        String(
+          error.message || ""
+        ).toLowerCase();
 
-      console.log(`[${flowId}] Phone registered`, registerData);
-    } catch (err) {
-      const message = String(err.message || "").toLowerCase();
-
-      if (message.includes("already") && message.includes("registered")) {
-        console.warn(`[${flowId}] Phone already registered, continuing`, {
-          phoneNumberId,
-        });
-      } else {
-        throw err;
+      if (
+        !(
+          message.includes(
+            "already"
+          ) &&
+          message.includes(
+            "registered"
+          )
+        )
+      ) {
+        throw error;
       }
     }
 
-    // 8. Subscribe app to WABA webhooks.
-    const subscribeData = await graphPost(
+    await graphPost(
       `/${wabaId}/subscribed_apps`,
       accessToken,
       {},
       "Subscribe app to WABA"
     );
 
-    console.log(`[${flowId}] WABA webhook subscription complete`, subscribeData);
+    const encryptedToken =
+      encryptSecret(
+        accessToken
+      );
 
-    // 9. Save to DB.
-    const userId = req.user?.id || req.user?._id || req.userId;
+    const tokenExpiresAt =
+      getTokenExpiry(
+        shortTokenData,
+        longTokenData
+      );
 
-    if (!userId) {
-      throw new Error("Missing authenticated user ID");
-    }
-
-    await User.findByIdAndUpdate(
-      userId,
-      {
-        $set: {
-          whatsappApiDetails: {
-            accessToken,
-            tokenType: longTokenData.token_type || tokenData.token_type || null,
-            expiresIn: longTokenData.expires_in || null,
-            wabaId,
+    const account =
+      await WhatsappAccount
+        .findOneAndUpdate(
+          {
             phoneNumberId,
-            displayPhoneNumber: selectedPhone.display_phone_number || null,
-            verifiedName: selectedPhone.verified_name || null,
-            connectedAt: new Date(),
           },
-          "integrations.whatsappApi": true,
-          "integrations.whatsappPending": false,
-        },
-      },
-      { new: true }
-    );
+          {
+            $set: {
+              businessId:
+                req.business._id,
 
-    console.log(`[${flowId}] WhatsApp connect completed`, {
-      userId,
-      wabaId,
-      phoneNumberId,
-    });
+              wabaId:
+                String(wabaId),
+
+              phoneNumberId,
+
+              displayPhoneNumber:
+                selectedPhone
+                  .display_phone_number ||
+                "",
+
+              verifiedName:
+                selectedPhone
+                  .verified_name ||
+                "",
+
+              encryptedValue:
+                encryptedToken
+                  .encryptedValue,
+
+              encryptionIv:
+                encryptedToken
+                  .encryptionIv,
+
+              encryptionTag:
+                encryptedToken
+                  .encryptionTag,
+
+              tokenType:
+                longTokenData
+                  .token_type ||
+                shortTokenData
+                  .token_type ||
+                "bearer",
+
+              tokenExpiresAt,
+              connectedAt:
+                new Date(),
+
+              status: "active",
+            },
+          },
+          {
+            upsert: true,
+            new: true,
+            setDefaultsOnInsert:
+              true,
+            runValidators:
+              true,
+          }
+        );
+
+    req.business.integrations =
+      req.business
+        .integrations || {};
+
+    req.business
+      .integrations
+      .whatsappConnected =
+      true;
+
+    await req.business.save();
+
+    console.log(
+      `[${flowId}] WhatsApp connection completed`,
+      {
+        businessId:
+          String(
+            req.business._id
+          ),
+
+        accountId:
+          String(account._id),
+
+        wabaId:
+          String(wabaId),
+
+        phoneNumberId,
+
+        hasEncryptedToken:
+          Boolean(
+            encryptedToken
+              .encryptedValue &&
+              encryptedToken
+                .encryptionIv &&
+              encryptedToken
+                .encryptionTag
+          ),
+      }
+    );
 
     return res.json({
       success: true,
-      message: "WhatsApp connected and registered",
-      wabaId,
-      phoneNumberId,
-      displayPhoneNumber: selectedPhone.display_phone_number,
-      verifiedName: selectedPhone.verified_name || null,
+
+      account: {
+        _id:
+          account._id,
+
+        businessId:
+          account.businessId,
+
+        wabaId:
+          account.wabaId,
+
+        phoneNumberId:
+          account.phoneNumberId,
+
+        displayPhoneNumber:
+          account
+            .displayPhoneNumber,
+
+        verifiedName:
+          account.verifiedName,
+
+        status:
+          account.status,
+
+        connectedAt:
+          account.connectedAt,
+      },
     });
   } catch (error) {
-    console.error(`[${flowId}] WhatsApp connect failed`, {
-      message: error.message,
-      meta: error.meta || null,
-      stack: process.env.NODE_ENV === "production" ? undefined : error.stack,
-    });
+    console.error(
+      `[${flowId}] WhatsApp connection failed`,
+      {
+        message:
+          error.message,
 
-    return res.status(error.status || 500).json({
-      success: false,
-      error: error.message,
-      meta: error.meta || null,
-    });
+        meta:
+          error.meta ||
+          null,
+
+        stack:
+          error.stack,
+      }
+    );
+
+    return res
+      .status(
+        error.status ||
+          500
+      )
+      .json({
+        success: false,
+
+        error:
+          error.message ||
+          "WhatsApp connection failed.",
+
+        ...(
+          process.env
+            .NODE_ENV !==
+            "production" &&
+          error.meta
+            ? {
+                meta:
+                  error.meta,
+              }
+            : {}
+        ),
+      });
   }
-};
+}
+
+export async function listWhatsappAccounts(
+  req,
+  res
+) {
+  /*
+   * Encryption fields remain excluded automatically
+   * because they have select:false in the schema.
+   */
+  const accounts =
+    await WhatsappAccount
+      .find({
+        businessId:
+          req.business._id,
+      })
+      .sort({
+        connectedAt: -1,
+      });
+
+  return res.json({
+    success: true,
+    accounts,
+  });
+}
+
+export async function disconnectWhatsappAccount(
+  req,
+  res
+) {
+  /*
+   * Do not set required token fields to undefined.
+   * Do not call document.save() after removing them.
+   *
+   * An atomic update changes only status and leaves
+   * the encrypted token fields valid in the document.
+   */
+  const account =
+    await WhatsappAccount
+      .findOneAndUpdate(
+        {
+          _id:
+            req.params
+              .accountId,
+
+          businessId:
+            req.business._id,
+        },
+        {
+          $set: {
+            status:
+              "disconnected",
+          },
+        },
+        {
+          new: true,
+        }
+      );
+
+  if (!account) {
+    return res
+      .status(404)
+      .json({
+        success: false,
+        error:
+          "WhatsApp account not found.",
+      });
+  }
+
+  const activeCount =
+    await WhatsappAccount
+      .countDocuments({
+        businessId:
+          req.business._id,
+
+        status:
+          "active",
+      });
+
+  req.business.integrations =
+    req.business
+      .integrations || {};
+
+  req.business
+    .integrations
+    .whatsappConnected =
+    activeCount > 0;
+
+  await req.business.save();
+
+  console.log(
+    "[wa-disconnect] WhatsApp account disconnected locally",
+    {
+      businessId:
+        String(
+          req.business._id
+        ),
+
+      accountId:
+        String(account._id),
+
+      phoneNumberId:
+        account.phoneNumberId,
+    }
+  );
+
+  return res.json({
+    success: true,
+
+    message:
+      "WhatsApp account disconnected locally.",
+
+    account: {
+      _id:
+        account._id,
+
+      phoneNumberId:
+        account.phoneNumberId,
+
+      displayPhoneNumber:
+        account
+          .displayPhoneNumber,
+
+      verifiedName:
+        account.verifiedName,
+
+      status:
+        account.status,
+    },
+  });
+}
