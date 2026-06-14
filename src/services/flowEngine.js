@@ -79,10 +79,14 @@ function findSelectedOption(options = [], event = {}, labelKey = "title") {
   return options.find((option) => {
     const label = option?.[labelKey] ?? option?.title ?? option?.label ?? "";
     const value = option?.value ?? "";
+    const normalizedLabel = normalizeText(label);
+    const normalizedValue = value && typeof value !== "object" ? normalizeText(value) : "";
     return (
       (selectionId && option?.id === selectionId) ||
-      (selectionText && normalizeText(label) === selectionText) ||
-      (selectionText && value && normalizeText(value) === selectionText)
+      (selectionText && normalizedLabel === selectionText) ||
+      (selectionText && normalizedValue === selectionText) ||
+      (selectionText && normalizedLabel && selectionText.includes(normalizedLabel)) ||
+      (selectionText && normalizedLabel && normalizedLabel.includes(selectionText))
     );
   }) || null;
 }
@@ -359,23 +363,31 @@ async function processOptionSelectionV2(flow, context) {
   if (!context.conversation.botState.currentNodeId) return false;
 
   const step = flow.steps?.find((item) => item.id === context.conversation.botState.currentNodeId);
-  if (!step || !step.config?.buttons) return false;
+  const entryStep = flow.steps?.find((item) => item.id === flow.entryStepId);
+  if (!step && !entryStep) return false;
 
-  const button = findSelectedOption(step.config.buttons, context.event, "label");
+  let selectedStep = step;
+  let button = findSelectedOption(step?.config?.buttons || [], context.event, "label");
+
+  if (!button && entryStep && entryStep.id !== step?.id) {
+    button = findSelectedOption(entryStep.config?.buttons || [], context.event, "label");
+    if (button) selectedStep = entryStep;
+  }
+
   if (!button) return false;
 
-  context.conversation.botState.variables.set(`${step.id}_selectionId`, button.id);
-  context.conversation.botState.variables.set(`${step.id}_selectionTitle`, button.label);
-  context.conversation.botState.variables.set(`${step.id}_value`, button.value ?? button.label);
+  context.conversation.botState.variables.set(`${selectedStep.id}_selectionId`, button.id);
+  context.conversation.botState.variables.set(`${selectedStep.id}_selectionTitle`, button.label);
+  context.conversation.botState.variables.set(`${selectedStep.id}_value`, button.value ?? button.label);
   
   if (button.action?.targetStepId) {
-    context.conversation.botState.currentNodeId = button.action.targetStepId || step.config?.nextStepId || null;
+    context.conversation.botState.currentNodeId = button.action.targetStepId || selectedStep.config?.nextStepId || null;
   } else if (button.action?.type === "end_conversation") {
     context.conversation.botState.currentNodeId = null; // Let the next cycle close it
     context.conversation.status = "closed";
     context.conversation.botState.active = false;
   } else {
-    context.conversation.botState.currentNodeId = step.config?.nextStepId || null;
+    context.conversation.botState.currentNodeId = selectedStep.config?.nextStepId || null;
   }
   
   return true;
