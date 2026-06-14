@@ -10,8 +10,8 @@ export function validateFlowDefinition(flowData, { mode = "draft" } = {}) {
 
   if (isV2) {
     const { entryStepId, steps = [] } = flowData;
-    if (!entryStepId) addError("MISSING_ENTRY_STEP", "Choose the first step customers should see.");
-    if (!Array.isArray(steps) || !steps.length) addError("NO_STEPS", "Add at least one step before publishing.");
+    if (strict && !entryStepId) addError("MISSING_ENTRY_STEP", "Choose the first step customers should see.");
+    if (strict && (!Array.isArray(steps) || !steps.length)) addError("NO_STEPS", "Add at least one step before publishing.");
 
     const stepIds = steps.map((s) => s.id).filter(Boolean);
     const stepSet = new Set(stepIds);
@@ -164,8 +164,8 @@ export function validateFlowDefinition(flowData, { mode = "draft" } = {}) {
   } else {
     // V1 Validation
     const { startNodeId, nodes = [] } = flowData;
-    if (!startNodeId) addError("MISSING_ENTRY_STEP", "Choose the first step customers should see.");
-    if (!Array.isArray(nodes) || !nodes.length) addError("NO_STEPS", "Add at least one step before publishing.");
+    if (strict && !startNodeId) addError("MISSING_ENTRY_STEP", "Choose the first step customers should see.");
+    if (strict && (!Array.isArray(nodes) || !nodes.length)) addError("NO_STEPS", "Add at least one step before publishing.");
 
     const nodeIds = nodes.map((node) => node.nodeId).filter(Boolean);
     const nodeSet = new Set(nodeIds);

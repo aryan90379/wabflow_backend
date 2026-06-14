@@ -1,4 +1,5 @@
 import { Business } from "../models/Business.js";
+import { AutomationFlow } from "../models/AutomationFlow.js";
 
 export async function createBusiness(req, res) {
   const business = await Business.create({
@@ -13,6 +14,32 @@ export async function createBusiness(req, res) {
     ...(req.body.openingHours ? { openingHours: req.body.openingHours } : {}),
     ...(req.body.settings ? { settings: req.body.settings } : {}),
   });
+
+  try {
+    const stepId = "step_welcome";
+    await AutomationFlow.create({
+      businessId: business._id,
+      name: "Welcome Assistant",
+      status: "draft",
+      isDefault: true,
+      version: 2,
+      trigger: { type: "any_message" },
+      entryStepId: stepId,
+      steps: [
+        {
+          id: stepId,
+          type: "message",
+          name: "Welcome Message",
+          config: {
+            text: `Hey! Welcome to ${business.name}. How can we help you today?`,
+            buttons: [],
+          },
+        },
+      ],
+    });
+  } catch (err) {
+    console.error("Failed to create default flow for business", err);
+  }
 
   return res.status(201).json({ success: true, business });
 }
