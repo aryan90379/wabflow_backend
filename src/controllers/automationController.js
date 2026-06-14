@@ -42,6 +42,47 @@ function normalizeFlowPayload(body = {}) {
   };
 }
 
+function pruneFlowToReachableSteps(flowData = {}) {
+  const steps = Array.isArray(flowData.steps) ? flowData.steps : [];
+  const entryStepId = flowData.entryStepId || steps[0]?.id;
+  if (flowData.version < 2 && !steps.length) return flowData;
+  if (!entryStepId || !steps.length) return flowData;
+
+  const stepById = new Map(steps.map((step) => [step.id, step]));
+  const reachable = new Set();
+  const pending = [entryStepId];
+
+  while (pending.length) {
+    const stepId = pending.pop();
+    if (!stepId || reachable.has(stepId)) continue;
+
+    const step = stepById.get(stepId);
+    if (!step) continue;
+
+    reachable.add(stepId);
+    if (step.config?.nextStepId) pending.push(step.config.nextStepId);
+    for (const button of step.config?.buttons || []) {
+      if (button.action?.targetStepId) pending.push(button.action.targetStepId);
+    }
+  }
+
+  return {
+    ...flowData,
+    entryStepId,
+    steps: steps
+      .filter((step) => reachable.has(step.id))
+      .map((step) => ({
+        ...step,
+        config: {
+          ...(step.config || {}),
+          buttons: (step.config?.buttons || []).filter(
+            (button) => !button.action?.targetStepId || reachable.has(button.action.targetStepId)
+          ),
+        },
+      })),
+  };
+}
+
 async function findOwned(Model, req, idParam) {
   return Model.findOne({ _id: req.params[idParam], businessId: req.business._id });
 }
@@ -184,7 +225,8 @@ export async function publishFlow(req, res) {
   const flow = await findOwned(AutomationFlow, req, "flowId");
   if (!flow) return res.status(404).json({ success: false, error: "Flow not found." });
 
-  const errors = validateFlowDefinition(flow.toObject(), { mode: "publish" });
+  const publishableFlow = pruneFlowToReachableSteps(flow.toObject());
+  const errors = validateFlowDefinition(publishableFlow, { mode: "publish" });
   if (errors.length) return res.status(400).json({ success: false, error: "Invalid flow.", details: errors });
 
   const shouldBeDefault = req.body.isDefault ?? flow.isDefault;
@@ -197,6 +239,8 @@ export async function publishFlow(req, res) {
 
   flow.status = "published";
   flow.isDefault = Boolean(shouldBeDefault);
+  if (publishableFlow.entryStepId) flow.entryStepId = publishableFlow.entryStepId;
+  if (Array.isArray(publishableFlow.steps)) flow.steps = publishableFlow.steps;
   flow.publishedAt = new Date();
   flow.publishedBy = req.userId;
   await flow.save();
