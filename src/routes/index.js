@@ -19,6 +19,7 @@ import {
   connectWhatsApp,
   disconnectWhatsappAccount,
   listWhatsappAccounts,
+  updateWhatsappBusinessProfile,
 } from "../controllers/whatsappController.js";
 import {
   archiveFlow,
@@ -94,6 +95,7 @@ businessRouter.patch("/", asyncHandler(updateBusiness));
 
 businessRouter.post("/whatsapp/connect", asyncHandler(connectWhatsApp));
 businessRouter.get("/whatsapp/accounts", asyncHandler(listWhatsappAccounts));
+businessRouter.patch("/whatsapp/accounts/:accountId/profile", asyncHandler(updateWhatsappBusinessProfile));
 businessRouter.delete("/whatsapp/accounts/:accountId", asyncHandler(disconnectWhatsappAccount));
 
 businessRouter.get("/knowledge", asyncHandler(listKnowledge));

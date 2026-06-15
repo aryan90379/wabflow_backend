@@ -1,6 +1,7 @@
 import { env } from "../config/env.js";
 import { WhatsappAccount } from "../models/WhatsappAccount.js";
 import { encryptSecret } from "../utils/crypto.js";
+import { getWhatsappAccountWithToken } from "../services/whatsappClient.js";
 
 const GRAPH_BASE =
   `https://graph.facebook.com/${
@@ -897,4 +898,156 @@ export async function disconnectWhatsappAccount(
         account.status,
     },
   });
+}
+
+export async function updateWhatsappBusinessProfile(
+  req,
+  res
+) {
+  const account =
+    await WhatsappAccount.findOne({
+      _id:
+        req.params.accountId,
+      businessId:
+        req.business._id,
+      status: "active",
+    });
+
+  if (!account) {
+    return res
+      .status(404)
+      .json({
+        success: false,
+        error:
+          "Active WhatsApp account not found.",
+      });
+  }
+
+  const displayName =
+    String(
+      req.body
+        .displayName ||
+        ""
+    )
+      .trim()
+      .slice(0, 80);
+
+  const about =
+    String(
+      req.body.about ||
+        ""
+    )
+      .trim()
+      .slice(0, 139);
+
+  const description =
+    String(
+      req.body
+        .description ||
+        ""
+    )
+      .trim()
+      .slice(0, 512);
+
+  const profilePictureUrl =
+    String(
+      req.body
+        .profilePictureUrl ||
+        ""
+    )
+      .trim();
+
+  const metaPayload = {
+    messaging_product:
+      "whatsapp",
+    ...(about ? { about } : {}),
+    ...(description
+      ? { description }
+      : {}),
+    ...(profilePictureUrl
+      ? {
+          profile_picture_url:
+            profilePictureUrl,
+        }
+      : {}),
+  };
+
+  try {
+    if (
+      about ||
+      description ||
+      profilePictureUrl
+    ) {
+      const {
+        accessToken,
+      } =
+        await getWhatsappAccountWithToken(
+          account._id
+        );
+
+      await graphPost(
+        `/${account.phoneNumberId}/whatsapp_business_profile`,
+        accessToken,
+        metaPayload,
+        "Update WhatsApp business profile"
+      );
+    }
+
+    account.profileDisplayName =
+      displayName;
+    account.profileAbout = about;
+    account.profileDescription =
+      description;
+    account.profilePictureUrl =
+      profilePictureUrl;
+
+    await account.save();
+
+    return res.json({
+      success: true,
+      account,
+      message:
+        "WhatsApp profile updated.",
+    });
+  } catch (error) {
+    console.error(
+      "[wa-profile] Update failed",
+      {
+        businessId:
+          String(
+            req.business._id
+          ),
+        accountId:
+          String(account._id),
+        error:
+          error.message,
+        meta:
+          error.meta ||
+          null,
+      }
+    );
+
+    return res
+      .status(
+        error.status ||
+          500
+      )
+      .json({
+        success: false,
+        error:
+          error.message ||
+          "Could not update WhatsApp profile.",
+        ...(
+          process.env
+            .NODE_ENV !==
+            "production" &&
+          error.meta
+            ? {
+                meta:
+                  error.meta,
+              }
+            : {}
+        ),
+      });
+  }
 }
