@@ -45,6 +45,14 @@ export async function createBusiness(req, res) {
 }
 
 export async function listMyBusinesses(req, res) {
+  if (req.authType === "staff") {
+    const business = await Business.findById(req.businessId);
+    if (!business || !business.active) {
+      return res.json({ success: true, businesses: [] });
+    }
+    return res.json({ success: true, businesses: [business] });
+  }
+
   const businesses = await Business.find({ ownerId: req.userId, active: true }).sort({ createdAt: -1 });
   return res.json({ success: true, businesses });
 }
