@@ -9,7 +9,16 @@ export async function requireBusinessAccess(req, res, next) {
       return res.status(400).json({ success: false, error: "Valid businessId is required." });
     }
 
-    const business = await Business.findOne({ _id: businessId, ownerId: req.userId, active: true });
+    let business;
+    if (req.authType === "staff") {
+      if (req.businessId.toString() !== businessId.toString()) {
+        return res.status(403).json({ success: false, error: "Access denied." });
+      }
+      business = await Business.findOne({ _id: businessId, active: true });
+    } else {
+      business = await Business.findOne({ _id: businessId, ownerId: req.userId, active: true });
+    }
+    
     if (!business) {
       return res.status(404).json({ success: false, error: "Business not found or access denied." });
     }

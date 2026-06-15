@@ -19,6 +19,8 @@ const leadSchema = new mongoose.Schema(
     preferredDate: { type: String, default: "" },
     preferredTime: { type: String, default: "" },
     city: { type: String, default: "" },
+    updatedByMemberId: { type: mongoose.Schema.Types.ObjectId, ref: "BusinessMember", default: null },
+    updatedByName: { type: String, default: "" },
     metadata: { type: Map, of: mongoose.Schema.Types.Mixed, default: {} },
   },
   { timestamps: true }

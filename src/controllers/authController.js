@@ -2,8 +2,13 @@ import { OAuth2Client } from "google-auth-library";
 import appleSignin from "apple-signin-auth";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
+import bcrypt from "bcrypt";
 
 import { User } from "../models/User.js";
+import { BusinessMember } from "../models/BusinessMember.js";
+import { Business } from "../models/Business.js";
+import { StaffSession } from "../models/StaffSession.js";
+import { AuditLog } from "../models/AuditLog.js";
 import { env } from "../config/env.js";
 
 const googleClient = new OAuth2Client();
@@ -234,8 +239,21 @@ export async function checkEmail(req, res) {
 
 export async function getMe(req, res) {
   try {
-    const user = await User.findById(req.userId);
+    if (req.authType === "staff") {
+      const member = await BusinessMember.findById(req.memberId).select("-passwordHash");
+      const business = await Business.findById(req.businessId);
+      if (!member) return res.status(404).json({ success: false, error: "Member not found." });
+      
+      return res.json({
+        success: true,
+        authType: "staff",
+        member,
+        business,
+        permissions: member.permissions
+      });
+    }
 
+    const user = await User.findById(req.userId);
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -245,6 +263,7 @@ export async function getMe(req, res) {
 
     return res.json({
       success: true,
+      authType: "owner",
       user,
     });
   } catch (error) {
@@ -254,5 +273,113 @@ export async function getMe(req, res) {
       success: false,
       error: "Server error.",
     });
+  }
+}
+
+export async function staffLogin(req, res) {
+  try {
+    const { businessCode, staffCode, password, device = {} } = req.body;
+
+    if (!businessCode || !staffCode || !password) {
+      return res.status(400).json({ success: false, error: "Missing required fields." });
+    }
+
+    const member = await BusinessMember.findOne({ businessCode, staffCode, status: "active" });
+    if (!member || !member.passwordHash) {
+      return res.status(401).json({ success: false, error: "Invalid credentials." });
+    }
+
+    const match = await bcrypt.compare(password, member.passwordHash);
+    if (!match) {
+      return res.status(401).json({ success: false, error: "Invalid credentials." });
+    }
+
+    const business = await Business.findById(member.businessId);
+    if (!business || !business.active || !business.teamAccess?.staffLoginEnabled) {
+      return res.status(403).json({ success: false, error: "Business login disabled." });
+    }
+
+    const sessionId = `sess_${crypto.randomBytes(16).toString("hex")}`;
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 30); // 30 days
+
+    await StaffSession.create({
+      businessId: member.businessId,
+      memberId: member._id,
+      sessionId,
+      tokenVersion: member.passwordVersion,
+      deviceId: device.deviceId,
+      deviceName: device.deviceName,
+      platform: device.platform,
+      appVersion: device.appVersion,
+      ip: req.ip,
+      userAgent: req.headers["user-agent"],
+      expiresAt,
+    });
+
+    const token = jwt.sign(
+      {
+        authType: "staff",
+        memberId: member._id,
+        sessionId,
+      },
+      env.jwtSecret(),
+      { expiresIn: "30d" }
+    );
+
+    member.lastLoginAt = new Date();
+    member.lastSeenAt = new Date();
+    await member.save();
+
+    await AuditLog.create({
+      businessId: member.businessId,
+      actorType: "staff",
+      actorMemberId: member._id,
+      actorName: member.name,
+      action: "auth.staff_login",
+      entityType: "BusinessMember",
+      entityId: member._id,
+      ip: req.ip,
+      userAgent: req.headers["user-agent"]
+    });
+
+    return res.json({
+      success: true,
+      token,
+      member: { ...member.toObject(), passwordHash: undefined },
+      business,
+      permissions: member.permissions
+    });
+  } catch (error) {
+    console.error("❌ Staff login error:", error);
+    return res.status(500).json({ success: false, error: "Server error." });
+  }
+}
+
+export async function staffLogout(req, res) {
+  try {
+    if (req.authType !== "staff" || !req.sessionId) {
+      return res.json({ success: true });
+    }
+
+    await StaffSession.findOneAndUpdate(
+      { sessionId: req.sessionId },
+      { status: "revoked", revokedAt: new Date(), revokedBy: req.memberId }
+    );
+
+    await AuditLog.create({
+      businessId: req.businessId,
+      actorType: "staff",
+      actorMemberId: req.memberId,
+      action: "auth.staff_logout",
+      entityType: "StaffSession",
+      entityId: null,
+      ip: req.ip,
+    });
+
+    return res.json({ success: true });
+  } catch (error) {
+    console.error("❌ Staff logout error:", error);
+    return res.status(500).json({ success: false, error: "Server error." });
   }
 }

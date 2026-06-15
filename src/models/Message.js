@@ -17,7 +17,10 @@ const messageSchema = new mongoose.Schema(
       index: true,
     },
     direction: { type: String, enum: ["inbound", "outbound"], required: true },
-    senderType: { type: String, enum: ["customer", "bot", "human"], required: true },
+    senderType: { type: String, enum: ["customer", "bot", "human", "owner", "staff"], required: true },
+    sentByUserId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    sentByMemberId: { type: mongoose.Schema.Types.ObjectId, ref: "BusinessMember", default: null },
+    sentByName: { type: String, default: "" },
     type: {
       type: String,
       enum: ["text", "image", "video", "audio", "document", "button", "list", "location", "unknown"],

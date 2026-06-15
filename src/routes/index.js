@@ -8,7 +8,22 @@ import {
   checkEmail,
   getMe,
   googleAuth,
+  staffLogin,
+  staffLogout
 } from "../controllers/authController.js";
+import {
+  listTeamMembers,
+  createTeamMember,
+  updateTeamMember,
+  resetMemberPassword,
+  revokeMemberAccess,
+  enableMemberAccess,
+  disableMemberAccess,
+  listMemberSessions,
+  revokeMemberSession,
+  listAuditLogs
+} from "../controllers/teamController.js";
+import { requirePermission } from "../middleware/permissionMiddleware.js";
 import {
   createBusiness,
   getBusiness,
@@ -77,6 +92,8 @@ apiRouter.get("/health", (req, res) => {
 apiRouter.post("/auth/google", asyncHandler(googleAuth));
 apiRouter.post("/auth/apple", asyncHandler(appleAuth));
 apiRouter.post("/auth/check-email", asyncHandler(checkEmail));
+apiRouter.post("/auth/staff/login", asyncHandler(staffLogin));
+apiRouter.post("/auth/staff/logout", authMiddleware, asyncHandler(staffLogout));
 apiRouter.get("/auth/me", authMiddleware, asyncHandler(getMe));
 
 apiRouter.get("/webhooks/whatsapp", verifyWebhook);
@@ -91,61 +108,74 @@ const businessRouter = Router({ mergeParams: true });
 businessRouter.use(requireBusinessAccess);
 
 businessRouter.get("/", asyncHandler(getBusiness));
-businessRouter.patch("/", asyncHandler(updateBusiness));
+businessRouter.patch("/", requirePermission("settings.edit"), asyncHandler(updateBusiness));
 
-businessRouter.post("/whatsapp/connect", asyncHandler(connectWhatsApp));
+businessRouter.post("/whatsapp/connect", requirePermission("settings.edit"), asyncHandler(connectWhatsApp));
 businessRouter.get("/whatsapp/accounts", asyncHandler(listWhatsappAccounts));
-businessRouter.patch("/whatsapp/accounts/:accountId/profile", asyncHandler(updateWhatsappBusinessProfile));
-businessRouter.delete("/whatsapp/accounts/:accountId", asyncHandler(disconnectWhatsappAccount));
+businessRouter.patch("/whatsapp/accounts/:accountId/profile", requirePermission("settings.edit"), asyncHandler(updateWhatsappBusinessProfile));
+businessRouter.delete("/whatsapp/accounts/:accountId", requirePermission("settings.edit"), asyncHandler(disconnectWhatsappAccount));
 
-businessRouter.get("/knowledge", asyncHandler(listKnowledge));
-businessRouter.post("/knowledge", asyncHandler(createKnowledge));
-businessRouter.patch("/knowledge/:knowledgeId", asyncHandler(updateKnowledge));
-businessRouter.delete("/knowledge/:knowledgeId", asyncHandler(deleteKnowledge));
+businessRouter.get("/knowledge", requirePermission("settings.view"), asyncHandler(listKnowledge));
+businessRouter.post("/knowledge", requirePermission("settings.edit"), asyncHandler(createKnowledge));
+businessRouter.patch("/knowledge/:knowledgeId", requirePermission("settings.edit"), asyncHandler(updateKnowledge));
+businessRouter.delete("/knowledge/:knowledgeId", requirePermission("settings.edit"), asyncHandler(deleteKnowledge));
 
-businessRouter.get("/services", asyncHandler(listServices));
-businessRouter.post("/services", asyncHandler(createService));
-businessRouter.patch("/services/:serviceId", asyncHandler(updateService));
-businessRouter.delete("/services/:serviceId", asyncHandler(deleteService));
-businessRouter.post("/uploads", asyncHandler(uploadMedia));
-businessRouter.post("/services/:serviceId/images", asyncHandler(uploadServiceImage));
-businessRouter.delete("/services/:serviceId/images", asyncHandler(removeServiceImage));
+businessRouter.get("/services", requirePermission("settings.view"), asyncHandler(listServices));
+businessRouter.post("/services", requirePermission("settings.edit"), asyncHandler(createService));
+businessRouter.patch("/services/:serviceId", requirePermission("settings.edit"), asyncHandler(updateService));
+businessRouter.delete("/services/:serviceId", requirePermission("settings.edit"), asyncHandler(deleteService));
+businessRouter.post("/uploads", requirePermission("settings.edit"), asyncHandler(uploadMedia));
+businessRouter.post("/services/:serviceId/images", requirePermission("settings.edit"), asyncHandler(uploadServiceImage));
+businessRouter.delete("/services/:serviceId/images", requirePermission("settings.edit"), asyncHandler(removeServiceImage));
 
-businessRouter.get("/automation-rules", asyncHandler(listRules));
-businessRouter.post("/automation-rules", asyncHandler(createRule));
-businessRouter.patch("/automation-rules/:ruleId", asyncHandler(updateRule));
-businessRouter.delete("/automation-rules/:ruleId", asyncHandler(deleteRule));
-businessRouter.get("/rules", asyncHandler(listRules));
-businessRouter.post("/rules", asyncHandler(createRule));
-businessRouter.patch("/rules/:ruleId", asyncHandler(updateRule));
-businessRouter.delete("/rules/:ruleId", asyncHandler(deleteRule));
+businessRouter.get("/automation-rules", requirePermission("settings.view"), asyncHandler(listRules));
+businessRouter.post("/automation-rules", requirePermission("settings.edit"), asyncHandler(createRule));
+businessRouter.patch("/automation-rules/:ruleId", requirePermission("settings.edit"), asyncHandler(updateRule));
+businessRouter.delete("/automation-rules/:ruleId", requirePermission("settings.edit"), asyncHandler(deleteRule));
+businessRouter.get("/rules", requirePermission("settings.view"), asyncHandler(listRules));
+businessRouter.post("/rules", requirePermission("settings.edit"), asyncHandler(createRule));
+businessRouter.patch("/rules/:ruleId", requirePermission("settings.edit"), asyncHandler(updateRule));
+businessRouter.delete("/rules/:ruleId", requirePermission("settings.edit"), asyncHandler(deleteRule));
 
-businessRouter.get("/flows", asyncHandler(listFlows));
-businessRouter.post("/flows", asyncHandler(createFlow));
-businessRouter.get("/flows/:flowId", asyncHandler(getFlow));
-businessRouter.put("/flows/:flowId", asyncHandler(updateFlow));
-businessRouter.post("/flows/:flowId/publish", asyncHandler(publishFlow));
-businessRouter.post("/flows/:flowId/archive", asyncHandler(archiveFlow));
+businessRouter.get("/flows", requirePermission("settings.view"), asyncHandler(listFlows));
+businessRouter.post("/flows", requirePermission("settings.edit"), asyncHandler(createFlow));
+businessRouter.get("/flows/:flowId", requirePermission("settings.view"), asyncHandler(getFlow));
+businessRouter.put("/flows/:flowId", requirePermission("settings.edit"), asyncHandler(updateFlow));
+businessRouter.post("/flows/:flowId/publish", requirePermission("settings.edit"), asyncHandler(publishFlow));
+businessRouter.post("/flows/:flowId/archive", requirePermission("settings.edit"), asyncHandler(archiveFlow));
 
-businessRouter.get("/conversations", asyncHandler(listConversations));
-businessRouter.get("/conversations/:conversationId", asyncHandler(getConversation));
-businessRouter.get("/conversations/:conversationId/messages", asyncHandler(listMessages));
-businessRouter.post("/conversations/:conversationId/messages", asyncHandler(sendHumanMessage));
-businessRouter.patch("/conversations/:conversationId/read", asyncHandler(markConversationRead));
-businessRouter.patch("/conversations/:conversationId/status", asyncHandler(updateConversationStatus));
+businessRouter.get("/conversations", requirePermission("inbox.view"), asyncHandler(listConversations));
+businessRouter.get("/conversations/:conversationId", requirePermission("inbox.view"), asyncHandler(getConversation));
+businessRouter.get("/conversations/:conversationId/messages", requirePermission("inbox.view"), asyncHandler(listMessages));
+businessRouter.post("/conversations/:conversationId/messages", requirePermission("inbox.reply"), asyncHandler(sendHumanMessage));
+businessRouter.patch("/conversations/:conversationId/read", requirePermission("inbox.view"), asyncHandler(markConversationRead));
+businessRouter.patch("/conversations/:conversationId/status", requirePermission("inbox.manage"), asyncHandler(updateConversationStatus));
 
-businessRouter.get("/leads", asyncHandler(listLeads));
-businessRouter.get("/leads/:leadId", asyncHandler(getLead));
-businessRouter.patch("/leads/:leadId", asyncHandler(updateLead));
-businessRouter.get("/bookings", asyncHandler(listBookings));
-businessRouter.get("/bookings/:bookingId", asyncHandler(getBooking));
-businessRouter.patch("/bookings/:bookingId", asyncHandler(updateBooking));
-businessRouter.get("/follow-ups", asyncHandler(listFollowUps));
-businessRouter.post("/follow-ups", asyncHandler(createFollowUp));
-businessRouter.patch("/follow-ups/:followUpId", asyncHandler(updateFollowUp));
-businessRouter.get("/handoffs", asyncHandler(listHandoffs));
-businessRouter.patch("/handoffs/:handoffId", asyncHandler(updateHandoff));
-businessRouter.get("/bot-decision-logs", asyncHandler(listDecisionLogs));
+businessRouter.get("/leads", requirePermission("inbox.view"), asyncHandler(listLeads));
+businessRouter.get("/leads/:leadId", requirePermission("inbox.view"), asyncHandler(getLead));
+businessRouter.patch("/leads/:leadId", requirePermission("inbox.manage"), asyncHandler(updateLead));
+businessRouter.get("/bookings", requirePermission("inbox.view"), asyncHandler(listBookings));
+businessRouter.get("/bookings/:bookingId", requirePermission("inbox.view"), asyncHandler(getBooking));
+businessRouter.patch("/bookings/:bookingId", requirePermission("inbox.manage"), asyncHandler(updateBooking));
+businessRouter.get("/follow-ups", requirePermission("inbox.view"), asyncHandler(listFollowUps));
+businessRouter.post("/follow-ups", requirePermission("inbox.manage"), asyncHandler(createFollowUp));
+businessRouter.patch("/follow-ups/:followUpId", requirePermission("inbox.manage"), asyncHandler(updateFollowUp));
+businessRouter.get("/handoffs", requirePermission("inbox.view"), asyncHandler(listHandoffs));
+businessRouter.patch("/handoffs/:handoffId", requirePermission("inbox.manage"), asyncHandler(updateHandoff));
+businessRouter.get("/bot-decision-logs", requirePermission("inbox.view"), asyncHandler(listDecisionLogs));
+
+// Team & Access
+businessRouter.get("/team", requirePermission("team.view"), asyncHandler(listTeamMembers));
+businessRouter.post("/team", requirePermission("team.create"), asyncHandler(createTeamMember));
+businessRouter.patch("/team/:memberId", requirePermission("team.edit"), asyncHandler(updateTeamMember));
+businessRouter.post("/team/:memberId/reset-password", requirePermission("team.resetPassword"), asyncHandler(resetMemberPassword));
+businessRouter.post("/team/:memberId/revoke", requirePermission("team.revoke"), asyncHandler(revokeMemberAccess));
+businessRouter.post("/team/:memberId/enable", requirePermission("team.edit"), asyncHandler(enableMemberAccess));
+businessRouter.post("/team/:memberId/disable", requirePermission("team.edit"), asyncHandler(disableMemberAccess));
+businessRouter.get("/team/:memberId/sessions", requirePermission("team.view"), asyncHandler(listMemberSessions));
+businessRouter.delete("/team/:memberId/sessions/:sessionId", requirePermission("team.revoke"), asyncHandler(revokeMemberSession));
+
+businessRouter.get("/audit-logs", requirePermission("settings.view"), asyncHandler(listAuditLogs));
 
 businessesRouter.use("/:businessId", businessRouter);
 apiRouter.use("/businesses", businessesRouter);

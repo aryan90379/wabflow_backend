@@ -24,6 +24,8 @@ const bookingSchema = new mongoose.Schema(
     customerName: { type: String, default: "" },
     customerPhone: { type: String, default: "" },
     notes: { type: String, default: "" },
+    updatedByMemberId: { type: mongoose.Schema.Types.ObjectId, ref: "BusinessMember", default: null },
+    updatedByName: { type: String, default: "" },
     metadata: { type: Map, of: mongoose.Schema.Types.Mixed, default: {} },
   },
   { timestamps: true }

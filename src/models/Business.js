@@ -49,6 +49,11 @@ const businessSchema = new mongoose.Schema(
     integrations: {
       whatsappConnected: { type: Boolean, default: false },
     },
+    teamAccess: {
+      businessCode: { type: String, default: null, unique: true, sparse: true },
+      staffLoginEnabled: { type: Boolean, default: true },
+      maxStaff: { type: Number, default: 5 },
+    },
     active: { type: Boolean, default: true },
   },
   { timestamps: true }
