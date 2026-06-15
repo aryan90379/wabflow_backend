@@ -24,14 +24,21 @@ export const uploadToBunny = async (fileBuffer, fileName, folder = "uploads") =>
 
   const storageUrl = `${BUNNY_BASE_URL}/${process.env.BUNNY_STORAGE_ZONE}/${cleanFolder}/${cleanFileName}`;
 
-  await axios.put(storageUrl, fileBuffer, {
-    headers: {
-      AccessKey: process.env.BUNNY_API_KEY,
-      "Content-Type": "application/octet-stream",
-    },
-    maxContentLength: Infinity,
-    maxBodyLength: Infinity,
-  });
+  try {
+    await axios.put(storageUrl, fileBuffer, {
+      headers: {
+        AccessKey: process.env.BUNNY_API_KEY,
+        "Content-Type": "application/octet-stream",
+      },
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
+    });
+  } catch (error) {
+    console.error("[BunnyCDN Upload Error]", error.response?.data || error.message);
+    const err = new Error("Failed to upload file to storage.");
+    err.status = 502;
+    throw err;
+  }
 
   return `${process.env.BUNNY_CDN_URL}/${cleanFolder}/${cleanFileName}`;
 };
@@ -54,11 +61,18 @@ export const deleteFromBunny = async (fileName, folder = "uploads") => {
 
   const storageUrl = `${BUNNY_BASE_URL}/${process.env.BUNNY_STORAGE_ZONE}/${cleanFolder}/${cleanFileName}`;
 
-  await axios.delete(storageUrl, {
-    headers: {
-      AccessKey: process.env.BUNNY_API_KEY,
-    },
-  });
+  try {
+    await axios.delete(storageUrl, {
+      headers: {
+        AccessKey: process.env.BUNNY_API_KEY,
+      },
+    });
+  } catch (error) {
+    console.error("[BunnyCDN Delete Error]", error.response?.data || error.message);
+    const err = new Error("Failed to delete file from storage.");
+    err.status = 502;
+    throw err;
+  }
 
   return true;
 };
