@@ -3,6 +3,7 @@ import { connectDatabase } from "./config/db.js";
 import { env } from "./config/env.js";
 import { startFollowUpWorker } from "./services/followUpWorker.js";
 import { initSocket } from "./services/socketService.js";
+import { initRawChatSocket } from "./services/rawChatSocketService.js";
 
 async function start() {
   await connectDatabase();
@@ -12,6 +13,7 @@ async function start() {
   });
 
   initSocket(server);
+  initRawChatSocket(server);
 
   const followUpTimer = startFollowUpWorker();
 

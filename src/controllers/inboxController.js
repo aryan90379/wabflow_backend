@@ -7,6 +7,7 @@ import {
 } from "../models/index.js";
 import { sendAndSaveMessage } from "../services/conversationService.js";
 import { broadcastToBusiness } from "../services/socketService.js";
+import { broadcastRawToBusiness } from "../services/rawChatSocketService.js";
 
 async function loadConversation(req) {
   return Conversation.findOne({
@@ -139,6 +140,11 @@ export async function markConversationRead(req, res) {
   await conversation.save();
 
   broadcastToBusiness(req.business._id.toString(), "conversation_updated", {
+    _id: conversation._id,
+    unreadCount: 0,
+    lastMessageAt: conversation.lastMessageAt,
+  });
+  broadcastRawToBusiness(req.business._id.toString(), "conversation_updated", {
     _id: conversation._id,
     unreadCount: 0,
     lastMessageAt: conversation.lastMessageAt,

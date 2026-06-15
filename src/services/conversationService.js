@@ -6,6 +6,7 @@ import {
 } from "../models/index.js";
 import { sendConfiguredWhatsappResponse } from "./whatsappClient.js";
 import { broadcastToBusiness } from "./socketService.js";
+import { broadcastRawToBusiness } from "./rawChatSocketService.js";
 
 export async function findOrCreateContactAndConversation({
   businessId,
@@ -97,11 +98,18 @@ export async function saveInboundMessage({ account, contact, conversation, event
     }
   );
 
-  broadcastToBusiness(account.businessId.toString(), "new_message", message.toObject());
+  const messagePayload = message.toObject();
+  broadcastToBusiness(account.businessId.toString(), "new_message", messagePayload);
+  broadcastRawToBusiness(account.businessId.toString(), "new_message", messagePayload);
   broadcastToBusiness(account.businessId.toString(), "conversation_updated", { 
     _id: conversation._id, 
     lastMessageAt: message.createdAt,
     unreadCount: (conversation.unreadCount || 0) + 1 
+  });
+  broadcastRawToBusiness(account.businessId.toString(), "conversation_updated", {
+    _id: conversation._id,
+    lastMessageAt: message.createdAt,
+    unreadCount: (conversation.unreadCount || 0) + 1,
   });
 
   return message;
@@ -150,10 +158,16 @@ export async function sendAndSaveMessage({
       }
     );
 
-    broadcastToBusiness(account.businessId.toString(), "new_message", temporaryMessage.toObject());
+    const messagePayload = temporaryMessage.toObject();
+    broadcastToBusiness(account.businessId.toString(), "new_message", messagePayload);
+    broadcastRawToBusiness(account.businessId.toString(), "new_message", messagePayload);
     broadcastToBusiness(account.businessId.toString(), "conversation_updated", { 
       _id: conversation._id, 
       lastMessageAt: temporaryMessage.createdAt 
+    });
+    broadcastRawToBusiness(account.businessId.toString(), "conversation_updated", {
+      _id: conversation._id,
+      lastMessageAt: temporaryMessage.createdAt,
     });
 
     return temporaryMessage;
