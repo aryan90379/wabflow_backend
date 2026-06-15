@@ -97,7 +97,7 @@ export async function saveInboundMessage({ account, contact, conversation, event
     }
   );
 
-  broadcastToBusiness(account.businessId.toString(), "new_message", message);
+  broadcastToBusiness(account.businessId.toString(), "new_message", message.toObject());
   broadcastToBusiness(account.businessId.toString(), "conversation_updated", { 
     _id: conversation._id, 
     lastMessageAt: message.createdAt,
@@ -150,7 +150,7 @@ export async function sendAndSaveMessage({
       }
     );
 
-    broadcastToBusiness(account.businessId.toString(), "new_message", temporaryMessage);
+    broadcastToBusiness(account.businessId.toString(), "new_message", temporaryMessage.toObject());
     broadcastToBusiness(account.businessId.toString(), "conversation_updated", { 
       _id: conversation._id, 
       lastMessageAt: temporaryMessage.createdAt 

@@ -32,13 +32,18 @@ export function initSocket(server) {
         if (typeof ack === "function") ack({ success: false, error: "Missing businessId" });
         return;
       }
-      console.log(`[socket] Joining room for business: ${businessId}`);
-      socket.join(`business_${businessId}`);
+      const room = `business_${businessId}`;
+      socket.join(room);
+      const roomSize = io.sockets.adapter.rooms.get(room)?.size || 0;
+      console.log(`[socket] Joining room for business: ${businessId} sockets=${roomSize}`);
       if (typeof ack === "function") ack({ success: true });
     });
 
     socket.on("leave_business", (businessId) => {
-      socket.leave(`business_${businessId}`);
+      const room = `business_${businessId}`;
+      socket.leave(room);
+      const roomSize = io.sockets.adapter.rooms.get(room)?.size || 0;
+      console.log(`[socket] Leaving room for business: ${businessId} sockets=${roomSize}`);
     });
 
     socket.on("disconnect", () => {
@@ -48,6 +53,15 @@ export function initSocket(server) {
 }
 
 export function broadcastToBusiness(businessId, event, data) {
-  if (!io) return;
-  io.to(`business_${businessId}`).emit(event, data);
+  if (!io) {
+    console.warn(`[socket] Broadcast skipped before socket init event=${event} business=${businessId}`);
+    return;
+  }
+
+  const room = `business_${businessId}`;
+  const roomSize = io.sockets.adapter.rooms.get(room)?.size || 0;
+  const entityId = data?._id || data?.id || data?.conversationId || "";
+
+  console.log(`[socket] Broadcasting ${event} business=${businessId} sockets=${roomSize} id=${entityId}`);
+  io.to(room).emit(event, data);
 }
