@@ -89,8 +89,16 @@ export async function sendHumanMessage(req, res) {
   const conversation = await loadConversation(req);
   if (!conversation) return res.status(404).json({ success: false, error: "Conversation not found." });
 
+  const type = ["text", "image"].includes(req.body.type) ? req.body.type : "text";
   const text = String(req.body.text || "").trim();
-  if (!text) return res.status(400).json({ success: false, error: "Message text is required." });
+  const mediaUrl = String(req.body.mediaUrl || "").trim();
+
+  if (type === "text" && !text) {
+    return res.status(400).json({ success: false, error: "Message text is required." });
+  }
+  if (type === "image" && !mediaUrl) {
+    return res.status(400).json({ success: false, error: "Image URL is required." });
+  }
 
   const [contact, account] = await Promise.all([
     Contact.findById(conversation.contactId),
@@ -105,7 +113,7 @@ export async function sendHumanMessage(req, res) {
     account,
     contact,
     conversation,
-    response: { type: "text", text },
+    response: type === "image" ? { type: "image", text, mediaUrl } : { type: "text", text },
     senderType: "human",
   });
 

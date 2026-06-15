@@ -34,6 +34,7 @@ const messageSchema = new mongoose.Schema(
       filename: { type: String, default: "" },
       caption: { type: String, default: "" },
     },
+    mediaUrl: { type: String, default: "" },
     whatsappMessageId: { type: String, sparse: true, unique: true, index: true },
     status: {
       type: String,

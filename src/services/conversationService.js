@@ -68,6 +68,7 @@ export async function saveInboundMessage({ account, contact, conversation, event
         title: event.selectionTitle || "",
       },
       media: event.media || {},
+      mediaUrl: event.mediaUrl || "",
       whatsappMessageId: event.messageId,
       status: "received",
       rawWebhookEventId: event.webhookEventId || "",
@@ -114,6 +115,7 @@ export async function sendAndSaveMessage({
     senderType,
     type: response.type === "buttons" ? "button" : response.type === "list" ? "list" : response.type || "text",
     text: response.text || "",
+    mediaUrl: response.mediaUrl || "",
     status: "queued",
   });
 
@@ -131,7 +133,7 @@ export async function sendAndSaveMessage({
         $set: {
           lastMessageAt: temporaryMessage.createdAt,
           lastMessage: {
-            text: temporaryMessage.text,
+            text: temporaryMessage.text || (temporaryMessage.mediaUrl ? "Image" : ""),
             type: temporaryMessage.type,
             direction: "outbound",
             at: temporaryMessage.createdAt,

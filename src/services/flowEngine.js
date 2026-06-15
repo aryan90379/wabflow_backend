@@ -197,7 +197,7 @@ async function saveAnswer(context, awaiting, value) {
 
   if (awaiting.saveTo === "booking") {
     const booking = await getOrCreateBooking(context);
-    const allowed = ["type", "status", "startDate", "endDate", "startTime", "guests", "customerName", "customerPhone", "notes"];
+    const allowed = ["type", "status", "serviceItemId", "startDate", "endDate", "startTime", "guests", "customerName", "customerPhone", "notes"];
     if (allowed.includes(fieldKey)) booking.set(fieldKey, value);
     else booking.metadata.set(fieldKey, value);
     await booking.save();
@@ -304,8 +304,8 @@ async function processWaitingInput(flow, context) {
     ...buildVariables(context),
     answer: result.value,
   };
-  const valueToSave = step.config?.valueTemplate
-    ? interpolate(step.config.valueTemplate, variables)
+  const valueToSave = node.question?.valueTemplate
+    ? interpolate(node.question.valueTemplate, variables)
     : result.value;
 
   await saveAnswer(context, awaiting, valueToSave);
@@ -345,7 +345,15 @@ async function processWaitingInputV2(flow, context) {
     return true;
   }
 
-  await saveAnswer(context, awaiting, result.value);
+  const variables = {
+    ...buildVariables(context),
+    answer: result.value,
+  };
+  const valueToSave = step.config?.valueTemplate
+    ? interpolate(step.config.valueTemplate, variables)
+    : result.value;
+
+  await saveAnswer(context, awaiting, valueToSave);
   context.conversation.botState.awaitingInput = null;
   context.conversation.botState.currentNodeId = optionNextNodeId || awaiting.nextNodeId || step.config?.nextStepId || null;
   return false;
@@ -602,6 +610,7 @@ export async function continueFlowV2({ flow, business, account, contact, convers
         options: buttons.map(b => ({
             id: b.id,
             title: b.label,
+            description: b.description,
         }))
       }, variables);
       
