@@ -27,9 +27,14 @@ export function initSocket(server) {
     console.log(`[socket] User connected: ${socket.user.userId || socket.user.id || socket.user._id}`);
     
     // Client should emit 'join_business' with the businessId they are viewing
-    socket.on("join_business", (businessId) => {
+    socket.on("join_business", (businessId, ack) => {
+      if (!businessId) {
+        if (typeof ack === "function") ack({ success: false, error: "Missing businessId" });
+        return;
+      }
       console.log(`[socket] Joining room for business: ${businessId}`);
       socket.join(`business_${businessId}`);
+      if (typeof ack === "function") ack({ success: true });
     });
 
     socket.on("leave_business", (businessId) => {
