@@ -111,12 +111,30 @@ export async function sendHumanMessage(req, res) {
     return res.status(400).json({ success: false, error: "Active contact/account connection is unavailable." });
   }
 
+  let senderType = "human";
+  let sentByUserId = null;
+  let sentByMemberId = null;
+  let sentByName = "";
+
+  if (req.authType === "owner") {
+    senderType = "owner";
+    sentByUserId = req.userId;
+    sentByName = "Admin";
+  } else if (req.authType === "staff") {
+    senderType = "staff";
+    sentByMemberId = req.memberId;
+    sentByName = req.actor?.name || "Staff";
+  }
+
   const message = await sendAndSaveMessage({
     account,
     contact,
     conversation,
     response: type === "image" ? { type: "image", text, mediaUrl } : { type: "text", text },
-    senderType: "human",
+    senderType,
+    sentByUserId,
+    sentByMemberId,
+    sentByName,
   });
 
   conversation.status = "human_needed";

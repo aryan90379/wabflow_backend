@@ -121,6 +121,9 @@ export async function sendAndSaveMessage({
   conversation,
   response,
   senderType = "bot",
+  sentByUserId = null,
+  sentByMemberId = null,
+  sentByName = "",
 }) {
   const temporaryMessage = await Message.create({
     businessId: account.businessId,
@@ -129,6 +132,9 @@ export async function sendAndSaveMessage({
     whatsappAccountId: account._id,
     direction: "outbound",
     senderType,
+    sentByUserId,
+    sentByMemberId,
+    sentByName,
     type: response.type === "buttons" ? "button" : response.type === "list" ? "list" : response.type || "text",
     text: response.text || "",
     mediaUrl: response.mediaUrl || "",
