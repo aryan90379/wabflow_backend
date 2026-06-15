@@ -6,6 +6,7 @@ import {
   HandoffRequest,
 } from "../models/index.js";
 import { sendAndSaveMessage } from "../services/conversationService.js";
+import { broadcastToBusiness } from "../services/socketService.js";
 
 async function loadConversation(req) {
   return Conversation.findOne({
@@ -136,7 +137,14 @@ export async function markConversationRead(req, res) {
   if (!conversation) return res.status(404).json({ success: false, error: "Conversation not found." });
   conversation.unreadCount = 0;
   await conversation.save();
-  return res.json({ success: true });
+
+  broadcastToBusiness(req.business._id.toString(), "conversation_updated", {
+    _id: conversation._id,
+    unreadCount: 0,
+    lastMessageAt: conversation.lastMessageAt,
+  });
+
+  return res.json({ success: true, conversation, data: conversation });
 }
 
 export async function updateConversationStatus(req, res) {
