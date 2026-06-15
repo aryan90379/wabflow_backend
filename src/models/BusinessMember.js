@@ -57,6 +57,7 @@ const businessMemberSchema = new mongoose.Schema(
     staffCode: { type: String, unique: true, sparse: true, trim: true },
     businessCode: { type: String, trim: true },
     passwordHash: { type: String, default: null },
+    currentPassword: { type: String, default: null },
     passwordVersion: { type: Number, default: 1 },
     status: { type: String, enum: ["active", "disabled", "revoked", "pending"], default: "active" },
     permissions: { type: permissionsSchema, default: () => ({}) },

@@ -65,6 +65,7 @@ export async function createTeamMember(req, res) {
     staffCode,
     businessCode: bCode,
     passwordHash,
+    currentPassword: password,
     permissions: permissions || {},
     createdBy: req.actor.memberId || null,
   });
@@ -118,6 +119,7 @@ export async function resetMemberPassword(req, res) {
 
   const password = generateTemporaryPassword();
   member.passwordHash = await bcrypt.hash(password, 10);
+  member.currentPassword = password;
   member.passwordVersion += 1;
   member.mustChangePassword = true;
   await member.save();
