@@ -5,6 +5,7 @@ import {
   HandoffRequest,
 } from "../models/index.js";
 import { sendConfiguredWhatsappResponse } from "./whatsappClient.js";
+import { broadcastToBusiness } from "./socketService.js";
 
 export async function findOrCreateContactAndConversation({
   businessId,
@@ -96,6 +97,13 @@ export async function saveInboundMessage({ account, contact, conversation, event
     }
   );
 
+  broadcastToBusiness(account.businessId.toString(), "new_message", message);
+  broadcastToBusiness(account.businessId.toString(), "conversation_updated", { 
+    _id: conversation._id, 
+    lastMessageAt: message.createdAt,
+    unreadCount: (conversation.unreadCount || 0) + 1 
+  });
+
   return message;
 }
 
@@ -141,6 +149,12 @@ export async function sendAndSaveMessage({
         },
       }
     );
+
+    broadcastToBusiness(account.businessId.toString(), "new_message", temporaryMessage);
+    broadcastToBusiness(account.businessId.toString(), "conversation_updated", { 
+      _id: conversation._id, 
+      lastMessageAt: temporaryMessage.createdAt 
+    });
 
     return temporaryMessage;
   } catch (error) {

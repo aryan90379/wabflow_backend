@@ -149,7 +149,10 @@ export async function deleteKnowledge(req, res) {
 }
 
 export async function listServices(req, res) {
-  const items = await ServiceItem.find({ businessId: req.business._id }).sort({ active: -1, createdAt: -1 });
+  const filter = { businessId: req.business._id };
+  if (req.query.type) filter.type = req.query.type;
+  
+  const items = await ServiceItem.find(filter).sort({ active: -1, createdAt: -1 });
   return res.json({ success: true, items, data: items, total: items.length, page: 1, limit: items.length });
 }
 

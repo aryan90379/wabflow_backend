@@ -2,6 +2,7 @@ import { app } from "./app.js";
 import { connectDatabase } from "./config/db.js";
 import { env } from "./config/env.js";
 import { startFollowUpWorker } from "./services/followUpWorker.js";
+import { initSocket } from "./services/socketService.js";
 
 async function start() {
   await connectDatabase();
@@ -9,6 +10,8 @@ async function start() {
   const server = app.listen(env.port, () => {
     console.log(`[server] WabFlow API listening on port ${env.port}`);
   });
+
+  initSocket(server);
 
   const followUpTimer = startFollowUpWorker();
 
