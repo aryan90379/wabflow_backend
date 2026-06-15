@@ -12,7 +12,7 @@ app.use(helmet());
 app.use(cors({ origin: true, credentials: true }));
 app.use(
   express.json({
-    limit: "2mb",
+    limit: "12mb",
     verify: (req, res, buffer) => {
       if (req.originalUrl.includes("/webhooks/whatsapp")) {
         req.rawBody = Buffer.from(buffer);
@@ -20,7 +20,7 @@ app.use(
     },
   })
 );
-app.use(express.urlencoded({ extended: true, limit: "2mb" }));
+app.use(express.urlencoded({ extended: true, limit: "12mb" }));
 app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 app.use("/api/meta", metaRoutes);
 app.use("/api", apiRouter);

@@ -4,6 +4,7 @@ import {
   BotKnowledge,
   ServiceItem,
 } from "../models/index.js";
+import { deleteFromBunny, fileNameFromUrl, uploadToBunny } from "../services/bunnyStorage.js";
 import { validateFlowDefinition } from "../utils/flowValidation.js";
 
 function cleanUpdate(body, blocked = []) {
@@ -87,6 +88,42 @@ async function findOwned(Model, req, idParam) {
   return Model.findOne({ _id: req.params[idParam], businessId: req.business._id });
 }
 
+function decodeBase64File(fileBase64 = "") {
+  const input = String(fileBase64 || "");
+  const [, dataUrlPayload] = input.match(/^data:[^;]+;base64,(.+)$/) || [];
+  const payload = dataUrlPayload || input;
+  return Buffer.from(payload, "base64");
+}
+
+function safeUploadFileName(fileName = "upload.bin") {
+  const baseName = String(fileName || "upload.bin").replace(/[^a-zA-Z0-9._-]/g, "-");
+  return `${Date.now()}-${baseName}`;
+}
+
+async function uploadRequestFile(req, folder) {
+  const buffer = req.body.fileBuffer
+    ? Buffer.from(req.body.fileBuffer)
+    : decodeBase64File(req.body.fileBase64);
+
+  if (!buffer.length) {
+    const error = new Error("fileBase64 is required.");
+    error.status = 400;
+    throw error;
+  }
+
+  if (buffer.length > 8 * 1024 * 1024) {
+    const error = new Error("Image is too large. Please upload a file under 8 MB.");
+    error.status = 413;
+    throw error;
+  }
+
+  return uploadToBunny(
+    buffer,
+    safeUploadFileName(req.body.fileName),
+    folder
+  );
+}
+
 export async function listKnowledge(req, res) {
   const items = await BotKnowledge.find({ businessId: req.business._id }).sort({ priority: -1, createdAt: -1 });
   return res.json({ success: true, items, data: items, total: items.length, page: 1, limit: items.length });
@@ -133,6 +170,39 @@ export async function deleteService(req, res) {
   const item = await ServiceItem.findOneAndDelete({ _id: req.params.serviceId, businessId: req.business._id });
   if (!item) return res.status(404).json({ success: false, error: "Service item not found." });
   return res.json({ success: true });
+}
+
+export async function uploadMedia(req, res) {
+  const folder = req.body.folder || `businesses/${req.business._id}/uploads`;
+  const url = await uploadRequestFile(req, folder);
+  return res.status(201).json({ success: true, url, data: { url } });
+}
+
+export async function uploadServiceImage(req, res) {
+  const item = await findOwned(ServiceItem, req, "serviceId");
+  if (!item) return res.status(404).json({ success: false, error: "Service item not found." });
+
+  const folder = `businesses/${req.business._id}/services/${item._id}`;
+  const url = await uploadRequestFile(req, folder);
+  item.images = [...(item.images || []), url];
+  await item.save();
+
+  return res.status(201).json({ success: true, url, item, data: item });
+}
+
+export async function removeServiceImage(req, res) {
+  const item = await findOwned(ServiceItem, req, "serviceId");
+  if (!item) return res.status(404).json({ success: false, error: "Service item not found." });
+
+  const imageUrl = String(req.body.url || "");
+  item.images = (item.images || []).filter((url) => url !== imageUrl);
+  await item.save();
+
+  if (imageUrl && process.env.BUNNY_STORAGE_ZONE && process.env.BUNNY_API_KEY) {
+    await deleteFromBunny(fileNameFromUrl(imageUrl), `businesses/${req.business._id}/services/${item._id}`);
+  }
+
+  return res.json({ success: true, item, data: item });
 }
 
 export async function listRules(req, res) {

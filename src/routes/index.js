@@ -35,10 +35,13 @@ import {
   listRules,
   listServices,
   publishFlow,
+  removeServiceImage,
   updateFlow,
   updateKnowledge,
   updateRule,
   updateService,
+  uploadMedia,
+  uploadServiceImage,
 } from "../controllers/automationController.js";
 import {
   getConversation,
@@ -102,6 +105,9 @@ businessRouter.get("/services", asyncHandler(listServices));
 businessRouter.post("/services", asyncHandler(createService));
 businessRouter.patch("/services/:serviceId", asyncHandler(updateService));
 businessRouter.delete("/services/:serviceId", asyncHandler(deleteService));
+businessRouter.post("/uploads", asyncHandler(uploadMedia));
+businessRouter.post("/services/:serviceId/images", asyncHandler(uploadServiceImage));
+businessRouter.delete("/services/:serviceId/images", asyncHandler(removeServiceImage));
 
 businessRouter.get("/automation-rules", asyncHandler(listRules));
 businessRouter.post("/automation-rules", asyncHandler(createRule));
