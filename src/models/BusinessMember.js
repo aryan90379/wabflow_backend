@@ -3,28 +3,9 @@ import mongoose from "mongoose";
 const permissionsSchema = new mongoose.Schema(
   {
     inbox: {
-      viewAll: { type: Boolean, default: false },
-      viewAssigned: { type: Boolean, default: true },
+      view: { type: Boolean, default: false },
       reply: { type: Boolean, default: false },
-      assign: { type: Boolean, default: false },
-      close: { type: Boolean, default: false },
-    },
-    bot: {
-      view: { type: Boolean, default: false },
-      edit: { type: Boolean, default: false },
-      publish: { type: Boolean, default: false },
-      pauseConversation: { type: Boolean, default: false },
-    },
-    leads: {
-      view: { type: Boolean, default: false },
-      edit: { type: Boolean, default: false },
-      assign: { type: Boolean, default: false },
-    },
-    bookings: {
-      view: { type: Boolean, default: false },
-      edit: { type: Boolean, default: false },
-      confirm: { type: Boolean, default: false },
-      cancel: { type: Boolean, default: false },
+      manage: { type: Boolean, default: false },
     },
     team: {
       view: { type: Boolean, default: false },
@@ -35,12 +16,7 @@ const permissionsSchema = new mongoose.Schema(
     },
     settings: {
       view: { type: Boolean, default: false },
-      editBusiness: { type: Boolean, default: false },
-      manageWhatsapp: { type: Boolean, default: false },
-      billing: { type: Boolean, default: false },
-    },
-    analytics: {
-      view: { type: Boolean, default: false },
+      edit: { type: Boolean, default: false },
     },
   },
   { _id: false }

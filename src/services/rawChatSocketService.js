@@ -48,6 +48,14 @@ const authenticate = async (request, businessId) => {
   }
 
   const payload = jwt.verify(token, env.jwtSecret());
+
+  if (payload.authType === "staff") {
+    if (String(payload.businessId) !== String(businessId)) {
+      throw new Error("Business access denied");
+    }
+    return { userId: payload.memberId, businessId: String(businessId), authType: "staff" };
+  }
+
   const userId = payload.userId || payload.id || payload._id;
 
   if (!userId) {
