@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import { BusinessMember } from "../models/BusinessMember.js";
 import { Business } from "../models/Business.js";
 import { StaffSession } from "../models/StaffSession.js";

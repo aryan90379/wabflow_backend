@@ -2,7 +2,7 @@ import { OAuth2Client } from "google-auth-library";
 import appleSignin from "apple-signin-auth";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 
 import { User } from "../models/User.js";
 import { BusinessMember } from "../models/BusinessMember.js";
