@@ -200,6 +200,10 @@ async function saveAnswer(context, awaiting, value) {
     const allowed = ["type", "status", "serviceItemId", "startDate", "endDate", "startTime", "guests", "customerName", "customerPhone", "notes"];
     if (allowed.includes(fieldKey)) booking.set(fieldKey, value);
     else booking.metadata.set(fieldKey, value);
+    if (fieldKey === "serviceItemId") {
+      const roomType = context.conversation.botState.variables.get("roomType");
+      if (roomType) booking.metadata.set("roomType", roomType);
+    }
     await booking.save();
   }
 }
@@ -329,6 +333,9 @@ async function processWaitingInputV2(flow, context) {
     const button = findSelectedOption(step.config.buttons, context.event, "label");
     if (button) {
       rawValue = button.value ?? button.label;
+      if (awaiting.fieldKey === "serviceItemId" && button.label) {
+        context.conversation.botState.variables.set("roomType", button.label);
+      }
       optionNextNodeId = button.action?.targetStepId || "";
     }
   }

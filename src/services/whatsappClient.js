@@ -206,7 +206,14 @@ export function buildWhatsappPayload(
       interactive: {
         type: "button",
 
-        ...(configuredResponse.header
+        ...(configuredResponse.mediaUrl
+          ? {
+              header: {
+                type: "image",
+                image: { link: configuredResponse.mediaUrl },
+              },
+            }
+          : configuredResponse.header
           ? {
               header: {
                 type: "text",

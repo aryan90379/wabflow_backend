@@ -5,6 +5,7 @@ import {
   WhatsappAccount,
   HandoffRequest,
 } from "../models/index.js";
+import { BusinessMember } from "../models/BusinessMember.js";
 import { sendAndSaveMessage } from "../services/conversationService.js";
 import { broadcastToBusiness } from "../services/socketService.js";
 import { broadcastRawToBusiness } from "../services/rawChatSocketService.js";
@@ -120,7 +121,12 @@ export async function sendHumanMessage(req, res) {
   if (req.authType === "owner") {
     senderType = "owner";
     sentByUserId = req.userId;
-    sentByName = "Admin";
+    const ownerMember = await BusinessMember.findOne({
+      businessId: conversation.businessId,
+      $or: [{ userId: req.userId }, { memberType: "owner" }],
+    }).select("name displayName avatarUrl").lean();
+    sentByName = ownerMember?.displayName || ownerMember?.name || req.actor?.name || "Admin";
+    sentByAvatarUrl = ownerMember?.avatarUrl || req.actor?.avatarUrl || "";
   } else if (req.authType === "staff") {
     senderType = "staff";
     sentByMemberId = req.memberId;
@@ -146,7 +152,7 @@ export async function sendHumanMessage(req, res) {
     conversation.lastHandledByMemberId = req.memberId;
     conversation.lastHandledByName = req.actor?.name || "Staff";
   } else {
-    conversation.lastHandledByName = "Admin";
+    conversation.lastHandledByName = sentByName || "Admin";
   }
   conversation.botState.active = false;
   conversation.botState.awaitingInput = null;

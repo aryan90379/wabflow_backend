@@ -12,6 +12,7 @@ import { AuditLog } from "../models/AuditLog.js";
 import { env } from "../config/env.js";
 
 const googleClient = new OAuth2Client();
+const STAFF_SESSION_DAYS = 365;
 
 function createAppToken(user) {
   return jwt.sign(
@@ -22,6 +23,18 @@ function createAppToken(user) {
     },
     env.jwtSecret(),
     { expiresIn: "30d" }
+  );
+}
+
+function createStaffToken(member, sessionId) {
+  return jwt.sign(
+    {
+      authType: "staff",
+      memberId: member._id,
+      sessionId,
+    },
+    env.jwtSecret(),
+    { expiresIn: `${STAFF_SESSION_DAYS}d` }
   );
 }
 
@@ -243,10 +256,18 @@ export async function getMe(req, res) {
       const member = await BusinessMember.findById(req.memberId).select("-passwordHash");
       const business = await Business.findById(req.businessId);
       if (!member) return res.status(404).json({ success: false, error: "Member not found." });
+
+      const refreshedExpiresAt = new Date();
+      refreshedExpiresAt.setDate(refreshedExpiresAt.getDate() + STAFF_SESSION_DAYS);
+      await StaffSession.updateOne(
+        { sessionId: req.sessionId, status: "active" },
+        { $set: { lastSeenAt: new Date(), expiresAt: refreshedExpiresAt } }
+      );
       
       return res.json({
         success: true,
         authType: "staff",
+        token: createStaffToken(member, req.sessionId),
         member,
         business,
         permissions: member.permissions
@@ -301,7 +322,7 @@ export async function staffLogin(req, res) {
 
     const sessionId = `sess_${crypto.randomBytes(16).toString("hex")}`;
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 30); // 30 days
+    expiresAt.setDate(expiresAt.getDate() + STAFF_SESSION_DAYS);
 
     await StaffSession.create({
       businessId: member.businessId,
@@ -317,15 +338,7 @@ export async function staffLogin(req, res) {
       expiresAt,
     });
 
-    const token = jwt.sign(
-      {
-        authType: "staff",
-        memberId: member._id,
-        sessionId,
-      },
-      env.jwtSecret(),
-      { expiresIn: "30d" }
-    );
+    const token = createStaffToken(member, sessionId);
 
     member.lastLoginAt = new Date();
     member.lastSeenAt = new Date();

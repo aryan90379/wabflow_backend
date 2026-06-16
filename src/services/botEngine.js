@@ -6,6 +6,7 @@ import {
   AutomationFlow,
   ServiceItem,
   HandoffRequest,
+  Booking,
 } from "../models/index.js";
 import { detectIntent } from "./intentDetector.js";
 import {
@@ -58,6 +59,168 @@ function ruleResponseToConfigured(response) {
   }
 
   return { type: "text", text: raw.text || "" };
+}
+
+function textLooksLikeRoomListRequest(text = "") {
+  const normalized = String(text || "").toLowerCase();
+  return /\b(view|show|list|available|see)\b/.test(normalized) && /\b(room|rooms|suite|suites)\b/.test(normalized);
+}
+
+async function sendRoomList({ business, account, contact, conversation, message = "Here are our available rooms. Tap Book to reserve." }) {
+  const rooms = await ServiceItem.find({
+    businessId: business._id,
+    type: "room",
+    active: true,
+  })
+    .sort({ createdAt: -1 })
+    .limit(10);
+
+  if (!rooms.length) {
+    const response = { type: "text", text: "No rooms are available right now. Please check again soon." };
+    await sendAndSaveMessage({ account, contact, conversation, response, senderType: "bot" });
+    return { response, rooms };
+  }
+
+  // Send intro message
+  await sendAndSaveMessage({
+    account, contact, conversation,
+    response: { type: "text", text: message },
+    senderType: "bot"
+  });
+
+  // Send each room as a separate button message with an image and details
+  for (const room of rooms) {
+    const priceStr = room.price !== null && room.price !== undefined ? `\nPrice: ${room.currency || "INR"} ${room.price}` : "";
+    const bodyText = `*${room.name}*${priceStr}\n\n${room.description || ""}`.trim().slice(0, 1024);
+    
+    const response = {
+      type: "buttons",
+      text: bodyText,
+      mediaUrl: room.images && room.images.length > 0 ? room.images[0] : undefined,
+      options: [
+        { id: `book_room_${room._id}`, title: "Book" }
+      ]
+    };
+    await sendAndSaveMessage({ account, contact, conversation, response, senderType: "bot" });
+  }
+
+  conversation.botState.active = false;
+  conversation.botState.flowId = null;
+  conversation.botState.flowVersion = null;
+  conversation.botState.currentNodeId = null;
+  conversation.botState.awaitingInput = null;
+  conversation.botState.updatedAt = new Date();
+  await conversation.save();
+  return { response: { type: "text", text: "Sent room list" }, rooms };
+}
+
+async function sendRoomDetail({ room, account, contact, conversation }) {
+  const price = room.price !== null && room.price !== undefined ? `\nPrice: ${room.currency || "INR"} ${room.price}` : "";
+  const details = `${room.name}\n${room.description || ""}${price}`.trim();
+
+  await sendAndSaveMessage({
+    account,
+    contact,
+    conversation,
+    response: room.images?.[0]
+      ? { type: "image", text: details, mediaUrl: room.images[0] }
+      : { type: "text", text: details },
+    senderType: "bot",
+  });
+
+  await sendAndSaveMessage({
+    account,
+    contact,
+    conversation,
+    response: {
+      type: "buttons",
+      text: `Would you like to book ${room.name}?`,
+      options: [
+        { id: `book_room_${room._id}`, title: "Book now" },
+        { id: "room_list", title: "View rooms" },
+      ],
+    },
+    senderType: "bot",
+  });
+
+  conversation.botState.active = false;
+  conversation.botState.flowId = null;
+  conversation.botState.flowVersion = null;
+  conversation.botState.currentNodeId = null;
+  conversation.botState.awaitingInput = null;
+  conversation.botState.variables = new Map([["serviceItemId", String(room._id)], ["roomType", room.name]]);
+  conversation.botState.updatedAt = new Date();
+  await conversation.save();
+}
+
+async function continueRoomBookingShortcut({ conversation, account, contact, event }) {
+  const awaiting = conversation.botState?.awaitingInput;
+  const variables = conversation.botState?.variables instanceof Map
+    ? conversation.botState.variables
+    : new Map(Object.entries(conversation.botState?.variables || {}));
+  const bookingId = variables.get("_bookingId");
+
+  if (!bookingId || !["room_booking_date", "room_booking_time"].includes(awaiting?.nodeId)) {
+    return { handled: false };
+  }
+
+  const answer = String(event.text || event.selectionTitle || "").trim();
+  if (!answer) {
+    await sendAndSaveMessage({
+      account,
+      contact,
+      conversation,
+      response: { type: "text", text: "Please type your preferred date or time." },
+      senderType: "bot",
+    });
+    return { handled: true, action: "asked_question" };
+  }
+
+  const booking = await Booking.findOne({ _id: bookingId, conversationId: conversation._id });
+  if (!booking) {
+    conversation.botState.active = false;
+    conversation.botState.awaitingInput = null;
+    await conversation.save();
+    return { handled: false };
+  }
+
+  if (awaiting.nodeId === "room_booking_date") {
+    booking.startDate = answer;
+    await booking.save();
+    conversation.botState.awaitingInput = {
+      nodeId: "room_booking_time",
+      fieldKey: "startTime",
+      saveTo: "booking",
+      validation: { required: true },
+      nextNodeId: "",
+    };
+    conversation.botState.updatedAt = new Date();
+    await conversation.save();
+    await sendAndSaveMessage({
+      account,
+      contact,
+      conversation,
+      response: { type: "text", text: "What time do you prefer?" },
+      senderType: "bot",
+    });
+    return { handled: true, action: "asked_question" };
+  }
+
+  booking.startTime = answer;
+  await booking.save();
+  conversation.botState.active = false;
+  conversation.botState.awaitingInput = null;
+  conversation.botState.currentNodeId = null;
+  conversation.botState.updatedAt = new Date();
+  await conversation.save();
+  await sendAndSaveMessage({
+    account,
+    contact,
+    conversation,
+    response: { type: "text", text: "Thanks! We have received your room booking request. Our team will check availability and confirm here shortly." },
+    senderType: "bot",
+  });
+  return { handled: true, action: "created_booking" };
 }
 
 async function writeDecision({
@@ -207,8 +370,93 @@ export async function processIncomingMessage(event) {
       return;
     }
 
-    if (event.selectionId?.startsWith("service_")) {
-      const serviceId = event.selectionId.slice("service_".length);
+    if (event.selectionId === "room_list" || textLooksLikeRoomListRequest(event.text || event.selectionTitle || "")) {
+      const { response } = await sendRoomList({
+        business,
+        account,
+        contact,
+        conversation,
+        message: "Here are the available room options. Tap a room to see details and book.",
+      });
+
+      await writeDecision({
+        businessId: business._id,
+        conversationId: conversation._id,
+        messageId: inboundMessage._id,
+        intent: "service_query",
+        confidence: 1,
+        actionTaken: "sent_reply",
+        reply: response.text,
+        metadata: { roomList: true },
+      });
+      return;
+    }
+
+    if (event.selectionId?.startsWith("book_room_")) {
+      const roomId = event.selectionId.slice("book_room_".length);
+      const room = await ServiceItem.findOne({
+        _id: roomId,
+        businessId: business._id,
+        type: "room",
+        active: true,
+      });
+
+      if (room) {
+        const booking = await Booking.create({
+          businessId: business._id,
+          contactId: contact._id,
+          conversationId: conversation._id,
+          serviceItemId: room._id,
+          type: "room_booking",
+          status: "requested",
+          customerName: contact.name || "",
+          customerPhone: contact.phone || contact.waId,
+          metadata: new Map([["roomType", room.name]]),
+        });
+
+        conversation.botState.active = true;
+        conversation.botState.flowId = null;
+        conversation.botState.flowVersion = null;
+        conversation.botState.currentNodeId = null;
+        conversation.botState.awaitingInput = {
+          nodeId: "room_booking_date",
+          fieldKey: "startDate",
+          saveTo: "booking",
+          validation: { required: true },
+          nextNodeId: "",
+        };
+        conversation.botState.variables = new Map([
+          ["_bookingId", String(booking._id)],
+          ["serviceItemId", String(room._id)],
+          ["roomType", room.name],
+        ]);
+        conversation.botState.updatedAt = new Date();
+        await conversation.save();
+
+        await sendAndSaveMessage({
+          account,
+          contact,
+          conversation,
+          response: { type: "text", text: `Great, I have selected ${room.name}. Which date would you like to book?` },
+          senderType: "bot",
+        });
+
+        await writeDecision({
+          businessId: business._id,
+          conversationId: conversation._id,
+          messageId: inboundMessage._id,
+          intent: "booking_request",
+          confidence: 1,
+          actionTaken: "created_booking",
+          metadata: { bookingId: booking._id, serviceItemId: room._id, roomType: room.name },
+        });
+        return;
+      }
+    }
+
+    if (event.selectionId?.startsWith("room_detail_") || event.selectionId?.startsWith("service_")) {
+      const isRoomDetail = event.selectionId?.startsWith("room_detail_");
+      const serviceId = event.selectionId.slice(isRoomDetail ? "room_detail_".length : "service_".length);
       const service = await ServiceItem.findOne({
         _id: serviceId,
         businessId: business._id,
@@ -216,6 +464,20 @@ export async function processIncomingMessage(event) {
       });
 
       if (service) {
+        if (service.type === "room") {
+          await sendRoomDetail({ room: service, account, contact, conversation });
+          await writeDecision({
+            businessId: business._id,
+            conversationId: conversation._id,
+            messageId: inboundMessage._id,
+            intent: "service_query",
+            confidence: 1,
+            actionTaken: "sent_reply",
+            metadata: { serviceItemId: service._id, roomDetail: true },
+          });
+          return;
+        }
+
         const price = service.price !== null && service.price !== undefined ? `\nPrice: ${service.currency || "INR"} ${service.price}` : "";
         const duration = service.durationMinutes ? `\nDuration: ${service.durationMinutes} minutes` : "";
         const reply = `${service.name}\n${service.description || ""}${price}${duration}`.trim();
@@ -228,6 +490,13 @@ export async function processIncomingMessage(event) {
             : { type: "text", text: reply },
           senderType: "bot",
         });
+        conversation.botState.active = false;
+        conversation.botState.flowId = null;
+        conversation.botState.flowVersion = null;
+        conversation.botState.currentNodeId = null;
+        conversation.botState.awaitingInput = null;
+        conversation.botState.updatedAt = new Date();
+        await conversation.save();
         await writeDecision({
           businessId: business._id,
           conversationId: conversation._id,
@@ -240,6 +509,26 @@ export async function processIncomingMessage(event) {
         });
         return;
       }
+    }
+
+    const roomBookingResult = await continueRoomBookingShortcut({
+      conversation,
+      account,
+      contact,
+      event,
+    });
+
+    if (roomBookingResult.handled) {
+      await writeDecision({
+        businessId: business._id,
+        conversationId: conversation._id,
+        messageId: inboundMessage._id,
+        intent: "booking_request",
+        confidence: 1,
+        actionTaken: roomBookingResult.action,
+        metadata: { roomBookingShortcut: true },
+      });
+      return;
     }
 
     const activeFlowResult = await continueActiveFlow({

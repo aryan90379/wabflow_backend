@@ -2,6 +2,7 @@ import jwt from "jsonwebtoken";
 import { env } from "../config/env.js";
 import { StaffSession } from "../models/StaffSession.js";
 import { BusinessMember } from "../models/BusinessMember.js";
+import { User } from "../models/User.js";
 
 export async function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization || "";
@@ -56,10 +57,17 @@ export async function authMiddleware(req, res, next) {
         return res.status(401).json({ success: false, error: "Invalid token payload." });
       }
 
+      const user = await User.findById(userId).select("name profilepic").lean();
+
       req.authType = "owner";
-      req.user = { ...payload, userId };
+      req.user = { ...payload, userId, name: user?.name || payload.name || "", profilepic: user?.profilepic || payload.profilepic || "" };
       req.userId = userId;
-      req.actor = { type: "owner", userId };
+      req.actor = {
+        type: "owner",
+        userId,
+        name: req.user.name || "Admin",
+        avatarUrl: req.user.profilepic || "",
+      };
       return next();
     }
   } catch (error) {
