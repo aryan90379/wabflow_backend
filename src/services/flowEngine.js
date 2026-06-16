@@ -637,9 +637,14 @@ export async function continueFlowV2({ flow, business, account, contact, convers
         }
       }
 
+      let responseText = config.text;
+      if (step.id === flow.entryStepId && responseText && !responseText.toLowerCase().includes('write hi to reset the flow')) {
+        responseText += '\n\n(write hi to reset the flow)';
+      }
+
       const response = renderResponse({
         type: responseType,
-        text: config.text,
+        text: responseText,
         header: config.header,
         footer: config.footer,
         mediaUrl: config.mediaUrl,
