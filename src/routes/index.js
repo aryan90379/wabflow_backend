@@ -59,7 +59,6 @@ import {
   updateService,
   uploadMedia,
   uploadServiceImage,
-  publishFlow,
   archiveFlow
 } from "../controllers/automationController.js";
 import {
