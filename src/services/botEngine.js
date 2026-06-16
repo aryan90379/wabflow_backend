@@ -133,6 +133,31 @@ export async function processIncomingMessage(event) {
     }
 
     if (conversation.status === "human_needed") {
+      if (event.selectionId === "talk_to_bot") {
+        conversation.status = "open";
+        conversation.botState.active = true;
+        conversation.botState.updatedAt = new Date();
+        await conversation.save();
+        
+        await sendAndSaveMessage({
+          account,
+          contact,
+          conversation,
+          response: { type: "text", text: "Bot is now active again. How can I help you?" },
+          senderType: "bot",
+        });
+        
+        await writeDecision({
+          businessId: business._id,
+          conversationId: conversation._id,
+          messageId: inboundMessage._id,
+          intent,
+          confidence,
+          actionTaken: "bot_resumed",
+        });
+        return;
+      }
+
       await writeDecision({
         businessId: business._id,
         conversationId: conversation._id,

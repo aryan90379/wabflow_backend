@@ -21,6 +21,7 @@ const messageSchema = new mongoose.Schema(
     sentByUserId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
     sentByMemberId: { type: mongoose.Schema.Types.ObjectId, ref: "BusinessMember", default: null },
     sentByName: { type: String, default: "" },
+    sentByAvatarUrl: { type: String, default: "" },
     type: {
       type: String,
       enum: ["text", "image", "video", "audio", "document", "button", "list", "location", "unknown"],

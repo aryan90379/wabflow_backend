@@ -124,6 +124,7 @@ export async function sendAndSaveMessage({
   sentByUserId = null,
   sentByMemberId = null,
   sentByName = "",
+  sentByAvatarUrl = "",
 }) {
   const temporaryMessage = await Message.create({
     businessId: account.businessId,
@@ -135,6 +136,7 @@ export async function sendAndSaveMessage({
     sentByUserId,
     sentByMemberId,
     sentByName,
+    sentByAvatarUrl,
     type: response.type === "buttons" ? "button" : response.type === "list" ? "list" : response.type || "text",
     text: response.text || "",
     mediaUrl: response.mediaUrl || "",
@@ -210,7 +212,11 @@ export async function createHandoff({ business, contact, conversation, reason, m
       account,
       contact,
       conversation,
-      response: { type: "text", text: message },
+      response: { 
+        type: "buttons", 
+        text: message + "\n\nYou can type out your request here.", 
+        options: [{ id: "talk_to_bot", title: "Talk to bot" }] 
+      },
       senderType: "bot",
     });
   }

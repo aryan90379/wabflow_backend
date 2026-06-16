@@ -30,6 +30,7 @@ const businessMemberSchema = new mongoose.Schema(
     role: { type: String, enum: ["owner", "admin", "manager", "agent", "viewer"], required: true },
     name: { type: String, required: true },
     displayName: { type: String, default: "" },
+    avatarUrl: { type: String, default: "" },
     staffCode: { type: String, unique: true, sparse: true, trim: true },
     businessCode: { type: String, trim: true },
     passwordHash: { type: String, default: null },

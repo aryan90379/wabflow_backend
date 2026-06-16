@@ -66,6 +66,7 @@ import {
   markConversationRead,
   sendHumanMessage,
   updateConversationStatus,
+  assignConversation,
 } from "../controllers/inboxController.js";
 import {
   createFollowUp,
@@ -150,6 +151,7 @@ businessRouter.get("/conversations/:conversationId/messages", requirePermission(
 businessRouter.post("/conversations/:conversationId/messages", requirePermission("inbox.reply"), asyncHandler(sendHumanMessage));
 businessRouter.patch("/conversations/:conversationId/read", requirePermission("inbox.view"), asyncHandler(markConversationRead));
 businessRouter.patch("/conversations/:conversationId/status", requirePermission("inbox.manage"), asyncHandler(updateConversationStatus));
+businessRouter.patch("/conversations/:conversationId/assign", requirePermission("inbox.manage"), asyncHandler(assignConversation));
 
 businessRouter.get("/leads", requirePermission("inbox.view"), asyncHandler(listLeads));
 businessRouter.get("/leads/:leadId", requirePermission("inbox.view"), asyncHandler(getLead));

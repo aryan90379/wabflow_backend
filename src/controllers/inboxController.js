@@ -115,6 +115,7 @@ export async function sendHumanMessage(req, res) {
   let sentByUserId = null;
   let sentByMemberId = null;
   let sentByName = "";
+  let sentByAvatarUrl = "";
 
   if (req.authType === "owner") {
     senderType = "owner";
@@ -124,6 +125,7 @@ export async function sendHumanMessage(req, res) {
     senderType = "staff";
     sentByMemberId = req.memberId;
     sentByName = req.actor?.name || "Staff";
+    sentByAvatarUrl = req.actor?.avatarUrl || "";
   }
 
   const message = await sendAndSaveMessage({
@@ -135,10 +137,17 @@ export async function sendHumanMessage(req, res) {
     sentByUserId,
     sentByMemberId,
     sentByName,
+    sentByAvatarUrl,
   });
 
   conversation.status = "human_needed";
   conversation.assignedTo = req.userId;
+  if (req.authType === "staff") {
+    conversation.lastHandledByMemberId = req.memberId;
+    conversation.lastHandledByName = req.actor?.name || "Staff";
+  } else {
+    conversation.lastHandledByName = "Admin";
+  }
   conversation.botState.active = false;
   conversation.botState.awaitingInput = null;
   await conversation.save();
@@ -184,8 +193,10 @@ export async function updateConversationStatus(req, res) {
 
   if (req.body.resumeBot === true) {
     conversation.status = "open";
-    conversation.assignedTo = null;
-    conversation.botState.active = false;
+    conversation.assignedToMemberId = null;
+    conversation.assignedToName = "";
+    conversation.botState.active = true;
+    conversation.automationResumeByMemberId = req.memberId || null;
     conversation.botState.awaitingInput = null;
     await HandoffRequest.updateMany(
       { conversationId: conversation._id, status: { $in: ["open", "assigned"] } },
@@ -193,6 +204,51 @@ export async function updateConversationStatus(req, res) {
     );
   }
 
+  if (status === "closed") {
+    conversation.closedAt = new Date();
+    conversation.closedByMemberId = req.memberId || null;
+  }
+
   await conversation.save();
+
+  broadcastToBusiness(req.business._id.toString(), "conversation_updated", {
+    _id: conversation._id,
+    status: conversation.status,
+    botState: conversation.botState,
+    lastMessageAt: conversation.lastMessageAt,
+  });
+  broadcastRawToBusiness(req.business._id.toString(), "conversation_updated", {
+    _id: conversation._id,
+    status: conversation.status,
+    botState: conversation.botState,
+    lastMessageAt: conversation.lastMessageAt,
+  });
+
+  return res.json({ success: true, conversation, data: conversation });
+}
+
+export async function assignConversation(req, res) {
+  const conversation = await loadConversation(req);
+  if (!conversation) return res.status(404).json({ success: false, error: "Conversation not found." });
+
+  const { memberId, name } = req.body; // if null, unassigns
+
+  if (memberId) {
+    conversation.assignedToMemberId = memberId;
+    conversation.assignedToName = name || "Staff";
+  } else {
+    conversation.assignedToMemberId = null;
+    conversation.assignedToName = "";
+  }
+
+  await conversation.save();
+
+  broadcastRawToBusiness(req.business._id.toString(), "conversation_updated", {
+    _id: conversation._id,
+    assignedToMemberId: conversation.assignedToMemberId,
+    assignedToName: conversation.assignedToName,
+    lastMessageAt: conversation.lastMessageAt,
+  });
+
   return res.json({ success: true, conversation, data: conversation });
 }
