@@ -207,6 +207,41 @@ export async function processIncomingMessage(event) {
       return;
     }
 
+    if (event.selectionId?.startsWith("service_")) {
+      const serviceId = event.selectionId.slice("service_".length);
+      const service = await ServiceItem.findOne({
+        _id: serviceId,
+        businessId: business._id,
+        active: true,
+      });
+
+      if (service) {
+        const price = service.price !== null && service.price !== undefined ? `\nPrice: ${service.currency || "INR"} ${service.price}` : "";
+        const duration = service.durationMinutes ? `\nDuration: ${service.durationMinutes} minutes` : "";
+        const reply = `${service.name}\n${service.description || ""}${price}${duration}`.trim();
+        await sendAndSaveMessage({
+          account,
+          contact,
+          conversation,
+          response: service.images?.[0]
+            ? { type: "image", text: reply, mediaUrl: service.images[0] }
+            : { type: "text", text: reply },
+          senderType: "bot",
+        });
+        await writeDecision({
+          businessId: business._id,
+          conversationId: conversation._id,
+          messageId: inboundMessage._id,
+          intent: "service_query",
+          confidence: 1,
+          actionTaken: "sent_reply",
+          reply,
+          metadata: { serviceItemId: service._id },
+        });
+        return;
+      }
+    }
+
     const activeFlowResult = await continueActiveFlow({
       business,
       account,
@@ -226,39 +261,6 @@ export async function processIncomingMessage(event) {
         flowId: activeFlowResult.flow?._id,
       });
       return;
-    }
-
-    if (event.selectionId?.startsWith("service_")) {
-      const serviceId = event.selectionId.slice("service_".length);
-      const service = await ServiceItem.findOne({
-        _id: serviceId,
-        businessId: business._id,
-        active: true,
-      });
-
-      if (service) {
-        const price = service.price !== null ? `\nPrice: ${service.currency} ${service.price}` : "";
-        const duration = service.durationMinutes ? `\nDuration: ${service.durationMinutes} minutes` : "";
-        const reply = `${service.name}\n${service.description || ""}${price}${duration}`.trim();
-        await sendAndSaveMessage({
-          account,
-          contact,
-          conversation,
-          response: { type: "text", text: reply },
-          senderType: "bot",
-        });
-        await writeDecision({
-          businessId: business._id,
-          conversationId: conversation._id,
-          messageId: inboundMessage._id,
-          intent: "service_query",
-          confidence: 1,
-          actionTaken: "sent_reply",
-          reply,
-          metadata: { serviceItemId: service._id },
-        });
-        return;
-      }
     }
 
     if (intent === "human_request" && business.settings.handoffEnabled) {
