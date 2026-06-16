@@ -8,11 +8,26 @@ function parseMessage(message, value, entryId) {
   if (type === "text") {
     text = message.text?.body || "";
   } else if (type === "interactive") {
-    const reply = message.interactive?.button_reply || message.interactive?.list_reply || {};
-    selectionId = reply.id || "";
-    selectionTitle = reply.title || "";
-    text = selectionTitle;
-    type = message.interactive?.button_reply ? "button" : "list";
+    if (message.interactive?.type === "nfm_reply") {
+      const reply = message.interactive.nfm_reply;
+      try {
+        const responseJson = JSON.parse(reply.response_json || "{}");
+        selectionId = "flow_submission";
+        selectionTitle = "Flow Form Submitted";
+        text = `Submitted flow: ${reply.name || "Flow"}`;
+        type = "flow_reply";
+        media = { responseJson }; // Storing form fields in media for easy access
+      } catch (e) {
+        text = "Flow form submitted but could not parse response.";
+        type = "flow_reply";
+      }
+    } else {
+      const reply = message.interactive?.button_reply || message.interactive?.list_reply || {};
+      selectionId = reply.id || "";
+      selectionTitle = reply.title || "";
+      text = selectionTitle;
+      type = message.interactive?.button_reply ? "button" : "list";
+    }
   } else if (type === "button") {
     selectionId = message.button?.payload || "";
     selectionTitle = message.button?.text || "";

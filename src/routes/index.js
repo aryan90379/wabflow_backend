@@ -59,6 +59,8 @@ import {
   updateService,
   uploadMedia,
   uploadServiceImage,
+  publishFlow,
+  archiveFlow
 } from "../controllers/automationController.js";
 import {
   getConversation,
@@ -83,6 +85,8 @@ import {
   updateHandoff,
   updateLead,
 } from "../controllers/crmController.js";
+import { getBotSettings, updateBotSettings } from "../controllers/botController.js";
+import { generateBookingFlow } from "../controllers/metaFlowController.js";
 import { receiveWebhook, verifyWebhook } from "../controllers/webhookController.js";
 
 const apiRouter = Router();
@@ -140,12 +144,14 @@ businessRouter.post("/rules", requirePermission("settings.edit"), asyncHandler(c
 businessRouter.patch("/rules/:ruleId", requirePermission("settings.edit"), asyncHandler(updateRule));
 businessRouter.delete("/rules/:ruleId", requirePermission("settings.edit"), asyncHandler(deleteRule));
 
-businessRouter.get("/flows", requirePermission("settings.view"), asyncHandler(listFlows));
-businessRouter.post("/flows", requirePermission("settings.edit"), asyncHandler(createFlow));
-businessRouter.get("/flows/:flowId", requirePermission("settings.view"), asyncHandler(getFlow));
-businessRouter.put("/flows/:flowId", requirePermission("settings.edit"), asyncHandler(updateFlow));
-businessRouter.post("/flows/:flowId/publish", requirePermission("settings.edit"), asyncHandler(publishFlow));
-businessRouter.post("/flows/:flowId/archive", requirePermission("settings.edit"), asyncHandler(archiveFlow));
+businessRouter.get("/flows", requirePermission("flows.view"), asyncHandler(listFlows));
+businessRouter.post("/flows", requirePermission("flows.create"), asyncHandler(createFlow));
+businessRouter.get("/flows/:flowId", requirePermission("flows.view"), asyncHandler(getFlow));
+businessRouter.patch("/flows/:flowId", requirePermission("flows.edit"), asyncHandler(updateFlow));
+businessRouter.post("/flows/:flowId/publish", requirePermission("flows.edit"), asyncHandler(publishFlow));
+businessRouter.delete("/flows/:flowId", requirePermission("flows.delete"), asyncHandler(deleteFlow));
+businessRouter.post("/flows/generate-booking", requirePermission("flows.create"), asyncHandler(generateBookingFlow));
+businessRouter.post("/flows/:flowId/archive", requirePermission("flows.edit"), asyncHandler(archiveFlow));
 
 businessRouter.get("/conversations", requirePermission("inbox.view"), asyncHandler(listConversations));
 businessRouter.get("/conversations/:conversationId", requirePermission("inbox.view"), asyncHandler(getConversation));

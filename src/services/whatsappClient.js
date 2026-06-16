@@ -256,6 +256,33 @@ export function buildWhatsappPayload(
     };
   }
 
+  if (type === "flow") {
+    return {
+      to,
+      type: "interactive",
+      interactive: {
+        type: "flow",
+        header: configuredResponse.header ? { type: "text", text: String(configuredResponse.header).slice(0, 60) } : undefined,
+        body: { text: String(configuredResponse.text || "Open form").slice(0, 1024) },
+        footer: configuredResponse.footer ? { text: String(configuredResponse.footer).slice(0, 60) } : undefined,
+        action: {
+          name: "flow",
+          parameters: {
+            flow_message_version: "3",
+            flow_token: configuredResponse.flowConfigId || "flow_token",
+            flow_id: configuredResponse.flowId,
+            flow_cta: String(configuredResponse.buttonText || "Open Form").slice(0, 20),
+            flow_action: "navigate",
+            flow_action_payload: {
+              screen: "BOOKING_FORM",
+              data: {}
+            }
+          }
+        }
+      }
+    };
+  }
+
   if (type === "list") {
     const options = sanitizeOptions(
       configuredResponse.options,

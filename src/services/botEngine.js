@@ -160,7 +160,7 @@ async function continueRoomBookingShortcut({ conversation, account, contact, eve
     : new Map(Object.entries(conversation.botState?.variables || {}));
   const bookingId = variables.get("_bookingId");
 
-  if (!bookingId || !["room_booking_date", "room_booking_time"].includes(awaiting?.nodeId)) {
+  if (!bookingId || !["room_booking_name", "room_booking_phone", "room_booking_date", "room_booking_time"].includes(awaiting?.nodeId)) {
     return { handled: false };
   }
 
@@ -170,7 +170,7 @@ async function continueRoomBookingShortcut({ conversation, account, contact, eve
       account,
       contact,
       conversation,
-      response: { type: "text", text: "Please type your preferred date or time." },
+      response: { type: "text", text: "Please provide a valid input." },
       senderType: "bot",
     });
     return { handled: true, action: "asked_question" };
@@ -182,6 +182,50 @@ async function continueRoomBookingShortcut({ conversation, account, contact, eve
     conversation.botState.awaitingInput = null;
     await conversation.save();
     return { handled: false };
+  }
+
+  if (awaiting.nodeId === "room_booking_name") {
+    booking.customerName = answer;
+    await booking.save();
+    conversation.botState.awaitingInput = {
+      nodeId: "room_booking_phone",
+      fieldKey: "customerPhone",
+      saveTo: "booking",
+      validation: { required: true },
+      nextNodeId: "",
+    };
+    conversation.botState.updatedAt = new Date();
+    await conversation.save();
+    await sendAndSaveMessage({
+      account,
+      contact,
+      conversation,
+      response: { type: "text", text: "What is your phone number?" },
+      senderType: "bot",
+    });
+    return { handled: true, action: "asked_question" };
+  }
+
+  if (awaiting.nodeId === "room_booking_phone") {
+    booking.customerPhone = answer;
+    await booking.save();
+    conversation.botState.awaitingInput = {
+      nodeId: "room_booking_date",
+      fieldKey: "startDate",
+      saveTo: "booking",
+      validation: { required: true },
+      nextNodeId: "",
+    };
+    conversation.botState.updatedAt = new Date();
+    await conversation.save();
+    await sendAndSaveMessage({
+      account,
+      contact,
+      conversation,
+      response: { type: "text", text: "Which date would you like to book?" },
+      senderType: "bot",
+    });
+    return { handled: true, action: "asked_question" };
   }
 
   if (awaiting.nodeId === "room_booking_date") {
@@ -419,8 +463,8 @@ export async function processIncomingMessage(event) {
         conversation.botState.flowVersion = null;
         conversation.botState.currentNodeId = null;
         conversation.botState.awaitingInput = {
-          nodeId: "room_booking_date",
-          fieldKey: "startDate",
+          nodeId: "room_booking_name",
+          fieldKey: "customerName",
           saveTo: "booking",
           validation: { required: true },
           nextNodeId: "",
@@ -437,7 +481,7 @@ export async function processIncomingMessage(event) {
           account,
           contact,
           conversation,
-          response: { type: "text", text: `Great, I have selected ${room.name}. Which date would you like to book?` },
+          response: { type: "text", text: `Great, I have selected ${room.name}. May I have your name for the booking?` },
           senderType: "bot",
         });
 

@@ -340,6 +340,21 @@ async function processWaitingInputV2(flow, context) {
     }
   }
 
+  if (awaiting.fieldKey === "meta_flow_response" && context.event.type === "flow_reply") {
+    const data = context.event.media?.responseJson || {};
+    const booking = await getOrCreateBooking(context);
+    if (data.customerName) booking.customerName = data.customerName;
+    if (data.customerPhone) booking.customerPhone = data.customerPhone;
+    if (data.startDate) booking.startDate = data.startDate;
+    if (data.startTime) booking.startTime = data.startTime;
+    if (data.notes) booking.notes = data.notes;
+    await booking.save();
+    
+    context.conversation.botState.awaitingInput = null;
+    context.conversation.botState.currentNodeId = awaiting.nextNodeId || step.config?.nextStepId || null;
+    return false;
+  }
+
   const result = validateAnswer(rawValue, awaiting.validation || {});
   if (!result.valid) {
     await sendAndSaveMessage({
@@ -552,6 +567,29 @@ export async function continueFlow({ flow, business, account, contact, conversat
     }
 
     if (node.type === "action") {
+      if (node.action?.actionType === "send_meta_flow") {
+        const payload = node.action?.config?.payload || node.action?.payload || {};
+        const response = {
+          type: "flow",
+          flowId: payload.flowId,
+          flowConfigId: payload.flowConfigId,
+          buttonText: payload.buttonText || "Open Form",
+          text: node.response?.text || "Please fill out the form.",
+        };
+        await sendAndSaveMessage({ account, contact, conversation, response, senderType: "bot" });
+        conversation.botState.currentNodeId = node.nodeId;
+        conversation.botState.awaitingInput = {
+          nodeId: node.nodeId,
+          fieldKey: "meta_flow_response",
+          saveTo: "booking",
+          validation: {},
+          nextNodeId: node.nextNodeId || "",
+        };
+        conversation.botState.updatedAt = new Date();
+        await conversation.save();
+        return { handled: true, action: "sent_meta_flow", flow };
+      }
+
       await executeAction(node, context);
       conversation.botState.currentNodeId = node.nextNodeId || null;
       continue;
