@@ -136,6 +136,9 @@ export async function processIncomingMessage(event) {
       if (event.selectionId === "talk_to_bot") {
         conversation.status = "open";
         conversation.botState.active = true;
+        conversation.botState.activeFlowId = null;
+        conversation.botState.currentNodeId = null;
+        conversation.botState.awaitingInput = null;
         conversation.botState.updatedAt = new Date();
         await conversation.save();
         
