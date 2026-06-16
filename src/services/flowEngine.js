@@ -645,7 +645,7 @@ export async function continueFlowV2({ flow, business, account, contact, convers
           const chunk = chunks[j];
           const response = renderResponse({
             type: "buttons",
-            text: j === 0 ? responseText : "More options 👇",
+            text: j === 0 ? responseText : "\u200B",
             header: j === 0 ? config.header : undefined,
             footer: j === 0 ? config.footer : undefined,
             mediaUrl: j === 0 ? config.mediaUrl : undefined,
