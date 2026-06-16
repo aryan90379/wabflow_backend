@@ -88,7 +88,7 @@ export async function createTeamMember(req, res) {
 
 export async function updateTeamMember(req, res) {
   const { businessId, memberId } = req.params;
-  const { name, role, permissions, status, notes } = req.body;
+  const { name, role, permissions, status, notes, avatarUrl, displayName } = req.body;
 
   const member = await BusinessMember.findOne({ _id: memberId, businessId });
   if (!member) return res.status(404).json({ success: false, error: "Member not found." });
@@ -100,6 +100,8 @@ export async function updateTeamMember(req, res) {
   if (permissions) member.permissions = permissions;
   if (status) member.status = status;
   if (notes !== undefined) member.notes = notes;
+  if (avatarUrl !== undefined) member.avatarUrl = avatarUrl;
+  if (displayName !== undefined) member.displayName = displayName;
 
   await member.save();
 

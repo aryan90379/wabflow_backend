@@ -39,7 +39,12 @@ export async function authMiddleware(req, res, next) {
       req.businessId = member.businessId;
       req.permissions = member.permissions;
       req.sessionId = session.sessionId;
-      req.actor = { type: "staff", memberId: member._id, name: member.name };
+      req.actor = {
+        type: "staff",
+        memberId: member._id,
+        name: member.displayName || member.name,
+        avatarUrl: member.avatarUrl || "",
+      };
       req.user = { ...payload }; // Keep payload for reference
       
       return next();

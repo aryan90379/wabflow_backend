@@ -151,14 +151,37 @@ export async function processIncomingMessage(event) {
           { conversationId: conversation._id, status: { $in: ["open", "assigned"] } },
           { $set: { status: "resolved", resolvedAt: new Date() } }
         );
-        
-        await sendAndSaveMessage({
-          account,
-          contact,
-          conversation,
-          response: { type: "text", text: "Bot is now active again. How can I help you?" },
-          senderType: "bot",
+
+        const triggeredFlow = await findTriggeredFlow({
+          businessId: business._id,
+          accountId: account._id,
+          text: "",
+          intent,
+          isFirstMessage: false,
         });
+
+        if (triggeredFlow) {
+          const result = await startFlow({
+            flow: triggeredFlow,
+            business,
+            account,
+            contact,
+            conversation,
+            event: { ...event, text: "" },
+          });
+
+          await writeDecision({
+            businessId: business._id,
+            conversationId: conversation._id,
+            messageId: inboundMessage._id,
+            intent,
+            confidence,
+            actionTaken: result.action || "bot_resumed_started_flow",
+            flowId: triggeredFlow._id,
+            metadata: { reason: "customer_tapped_talk_to_bot" },
+          });
+          return;
+        }
         
         await writeDecision({
           businessId: business._id,
@@ -167,6 +190,7 @@ export async function processIncomingMessage(event) {
           intent,
           confidence,
           actionTaken: "bot_resumed",
+          metadata: { reason: "no_resume_flow_found" },
         });
         return;
       }
