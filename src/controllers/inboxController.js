@@ -193,11 +193,17 @@ export async function updateConversationStatus(req, res) {
 
   if (req.body.resumeBot === true) {
     conversation.status = "open";
+    conversation.assignedTo = null;
     conversation.assignedToMemberId = null;
     conversation.assignedToName = "";
-    conversation.botState.active = true;
+    conversation.botState.active = false;
+    conversation.botState.flowId = null;
+    conversation.botState.flowVersion = null;
+    conversation.botState.currentNodeId = null;
     conversation.automationResumeByMemberId = req.memberId || null;
     conversation.botState.awaitingInput = null;
+    conversation.botState.variables = new Map();
+    conversation.botState.updatedAt = new Date();
     await HandoffRequest.updateMany(
       { conversationId: conversation._id, status: { $in: ["open", "assigned"] } },
       { $set: { status: "resolved", resolvedAt: new Date() } }

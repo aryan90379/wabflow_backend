@@ -5,6 +5,7 @@ import {
   BotDecisionLog,
   AutomationFlow,
   ServiceItem,
+  HandoffRequest,
 } from "../models/index.js";
 import { detectIntent } from "./intentDetector.js";
 import {
@@ -135,12 +136,21 @@ export async function processIncomingMessage(event) {
     if (conversation.status === "human_needed") {
       if (event.selectionId === "talk_to_bot") {
         conversation.status = "open";
-        conversation.botState.active = true;
-        conversation.botState.activeFlowId = null;
+        conversation.assignedTo = null;
+        conversation.assignedToMemberId = null;
+        conversation.assignedToName = "";
+        conversation.botState.active = false;
+        conversation.botState.flowId = null;
+        conversation.botState.flowVersion = null;
         conversation.botState.currentNodeId = null;
         conversation.botState.awaitingInput = null;
+        conversation.botState.variables = new Map();
         conversation.botState.updatedAt = new Date();
         await conversation.save();
+        await HandoffRequest.updateMany(
+          { conversationId: conversation._id, status: { $in: ["open", "assigned"] } },
+          { $set: { status: "resolved", resolvedAt: new Date() } }
+        );
         
         await sendAndSaveMessage({
           account,
