@@ -1,6 +1,8 @@
 import { WebSocket, WebSocketServer } from "ws";
 import jwt from "jsonwebtoken";
 import { Business } from "../models/Business.js";
+import { BusinessMember } from "../models/BusinessMember.js";
+import { StaffSession } from "../models/StaffSession.js";
 import { env } from "../config/env.js";
 
 let wss;
@@ -50,10 +52,29 @@ const authenticate = async (request, businessId) => {
   const payload = jwt.verify(token, env.jwtSecret());
 
   if (payload.authType === "staff") {
-    if (String(payload.businessId) !== String(businessId)) {
+    const [session, member] = await Promise.all([
+      StaffSession.findOne({ sessionId: payload.sessionId, status: "active" }),
+      BusinessMember.findById(payload.memberId),
+    ]);
+
+    if (!session || !member || member.status !== "active") {
+      throw new Error("Staff access revoked");
+    }
+
+    if (session.tokenVersion !== member.passwordVersion) {
+      throw new Error("Staff token expired");
+    }
+
+    if (String(member.businessId) !== String(businessId)) {
       throw new Error("Business access denied");
     }
-    return { userId: payload.memberId, businessId: String(businessId), authType: "staff" };
+
+    const business = await Business.findOne({ _id: businessId, active: true }).select("_id");
+    if (!business) {
+      throw new Error("Business access denied");
+    }
+
+    return { userId: String(member._id), businessId: String(business._id), authType: "staff" };
   }
 
   const userId = payload.userId || payload.id || payload._id;
