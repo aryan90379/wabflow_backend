@@ -12,7 +12,7 @@ const botDecisionLogSchema = new mongoose.Schema(
     matchedKnowledgeId: { type: mongoose.Schema.Types.ObjectId, ref: "BotKnowledge", default: null },
     actionTaken: {
       type: String,
-      enum: ["sent_reply", "asked_question", "started_flow", "continued_flow", "created_lead", "created_booking", "handoff", "ignored", "error"],
+      enum: ["sent_reply", "asked_question", "started_flow", "continued_flow", "created_lead", "created_booking", "handoff", "ignored", "error", "bot_resumed", "bot_resumed_started_flow", "sent_meta_flow"],
       default: "sent_reply",
     },
     aiReply: { type: String, default: "" },
