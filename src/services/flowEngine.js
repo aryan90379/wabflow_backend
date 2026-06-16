@@ -629,37 +629,44 @@ export async function continueFlowV2({ flow, business, account, contact, convers
           description: b.description,
       }));
 
-      let responseType = config.messageType || (buttons.length ? "buttons" : "text");
-
-      if (buttons.length > 3) {
-        if (showAll) {
-          responseType = "list";
-        } else {
-          responseType = "buttons";
-          responseOptions = responseOptions.slice(0, 2);
-          responseOptions.push({
-            id: `__sys_more_options_${step.id}`,
-            title: "More Options 🔽"
-          });
-        }
-      }
-
       let responseText = config.text;
       if (step.id === flow.entryStepId && responseText && !responseText.toLowerCase().includes('write hi to reset the flow')) {
         responseText += '\n\n(write hi to reset the flow)';
       }
 
-      const response = renderResponse({
-        type: responseType,
-        text: responseText,
-        header: config.header,
-        footer: config.footer,
-        mediaUrl: config.mediaUrl,
-        filename: config.filename,
-        options: responseOptions
-      }, variables);
-      
-      await sendAndSaveMessage({ account, contact, conversation, response, senderType: "bot" });
+      let responseType = config.messageType || (buttons.length ? "buttons" : "text");
+
+      if (buttons.length > 3 && responseType !== "list") {
+        const chunks = [];
+        for (let j = 0; j < responseOptions.length; j += 3) {
+          chunks.push(responseOptions.slice(j, j + 3));
+        }
+        for (let j = 0; j < chunks.length; j++) {
+          const chunk = chunks[j];
+          const response = renderResponse({
+            type: "buttons",
+            text: j === 0 ? responseText : "More options 👇",
+            header: j === 0 ? config.header : undefined,
+            footer: j === 0 ? config.footer : undefined,
+            mediaUrl: j === 0 ? config.mediaUrl : undefined,
+            filename: j === 0 ? config.filename : undefined,
+            options: chunk
+          }, variables);
+          await sendAndSaveMessage({ account, contact, conversation, response, senderType: "bot" });
+        }
+      } else {
+        const response = renderResponse({
+          type: responseType,
+          text: responseText,
+          header: config.header,
+          footer: config.footer,
+          mediaUrl: config.mediaUrl,
+          filename: config.filename,
+          options: responseOptions
+        }, variables);
+        
+        await sendAndSaveMessage({ account, contact, conversation, response, senderType: "bot" });
+      }
 
       if (step.type === "question") {
         conversation.botState.currentNodeId = step.id;
