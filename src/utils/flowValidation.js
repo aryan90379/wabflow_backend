@@ -45,13 +45,10 @@ export function validateFlowDefinition(flowData, { mode = "draft" } = {}) {
         }
 
         if (step.config?.buttons) {
-          const maxOptions = step.config?.messageType === "list" ? 10 : 3;
-          if (step.config.buttons.length > maxOptions) {
+          if (step.config.buttons.length > 10) {
             addError(
-              step.config?.messageType === "list" ? "TOO_MANY_LIST_OPTIONS" : "TOO_MANY_BUTTONS",
-              step.config?.messageType === "list"
-                ? "WhatsApp lists support at most 10 options in this message."
-                : "WhatsApp supports at most 3 reply buttons in this message.",
+              "TOO_MANY_BUTTONS",
+              "WhatsApp supports at most 10 buttons per message in this version.",
               { stepId }
             );
           }
