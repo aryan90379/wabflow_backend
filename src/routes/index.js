@@ -7,6 +7,7 @@ import {
   appleAuth,
   checkEmail,
   getMe,
+  updateMe,
   googleAuth,
   staffLogin,
   staffLogout
@@ -96,6 +97,7 @@ apiRouter.post("/auth/check-email", asyncHandler(checkEmail));
 apiRouter.post("/auth/staff/login", asyncHandler(staffLogin));
 apiRouter.post("/auth/staff/logout", authMiddleware, asyncHandler(staffLogout));
 apiRouter.get("/auth/me", authMiddleware, asyncHandler(getMe));
+apiRouter.patch("/auth/me", authMiddleware, asyncHandler(updateMe));
 
 apiRouter.get("/webhooks/whatsapp", verifyWebhook);
 apiRouter.post("/webhooks/whatsapp", receiveWebhook);

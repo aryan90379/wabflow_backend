@@ -8,6 +8,8 @@ const userSchema = new mongoose.Schema(
     name: { type: String, trim: true, default: "" },
     profilepic: { type: String, default: "" },
     lastLoginAt: { type: Date, default: Date.now },
+    language: { type: String, enum: ['en', 'hi'], default: 'en' },
+    languageSet: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

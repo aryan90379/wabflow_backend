@@ -297,6 +297,35 @@ export async function getMe(req, res) {
   }
 }
 
+export async function updateMe(req, res) {
+  try {
+    if (req.authType === "staff") {
+      // For now, staff cannot update language or it's not supported
+      return res.status(403).json({ success: false, error: "Staff cannot update preferences yet." });
+    }
+
+    const { language, languageSet } = req.body;
+    
+    const user = await User.findById(req.userId);
+    if (!user) {
+      return res.status(404).json({ success: false, error: "User not found." });
+    }
+
+    if (language !== undefined) user.language = language;
+    if (languageSet !== undefined) user.languageSet = languageSet;
+
+    await user.save();
+
+    return res.json({
+      success: true,
+      user,
+    });
+  } catch (error) {
+    console.error("❌ Update me error:", error);
+    return res.status(500).json({ success: false, error: "Server error." });
+  }
+}
+
 export async function staffLogin(req, res) {
   try {
     const { businessCode, staffCode, password, device = {} } = req.body;
