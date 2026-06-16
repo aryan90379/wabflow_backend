@@ -454,6 +454,13 @@ export async function continueActiveFlow({ business, account, contact, conversat
     return { handled: false };
   }
 
+  const text = normalizeText(event?.text || "");
+  if (text === "hi" || text === "hey" || text === "hello") {
+    conversation.botState.currentNodeId = flow.version >= 2 ? flow.entryStepId : flow.startNodeId;
+    conversation.botState.awaitingInput = null;
+    conversation.botState.variables = new Map();
+  }
+
   return continueFlow({ flow, business, account, contact, conversation, event });
 }
 
