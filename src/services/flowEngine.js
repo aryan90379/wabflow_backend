@@ -390,6 +390,13 @@ async function processOptionSelectionV2(flow, context) {
   if (!step && !entryStep) return false;
 
   let selectedStep = step;
+
+  if (context.event.selectionId === `__sys_more_options_${selectedStep?.id}`) {
+    context.conversation.botState.variables.set(`${selectedStep.id}_show_all`, true);
+    context.conversation.botState.currentNodeId = selectedStep.id;
+    return true;
+  }
+
   let button = findSelectedOption(step?.config?.buttons || [], context.event, "label");
 
   if (!button && entryStep && entryStep.id !== step?.id) {
@@ -607,18 +614,37 @@ export async function continueFlowV2({ flow, business, account, contact, convers
     if (step.type === "message" || step.type === "question") {
       const config = step.config || {};
       const buttons = config.buttons || [];
+      const showAll = conversation.botState.variables.get(`${step.id}_show_all`);
+
+      let responseOptions = buttons.map(b => ({
+          id: b.id,
+          title: b.label,
+          description: b.description,
+      }));
+
+      let responseType = config.messageType || (buttons.length ? "buttons" : "text");
+
+      if (buttons.length > 3) {
+        if (showAll) {
+          responseType = "list";
+        } else {
+          responseType = "buttons";
+          responseOptions = responseOptions.slice(0, 2);
+          responseOptions.push({
+            id: `__sys_more_options_${step.id}`,
+            title: "More Options 🔽"
+          });
+        }
+      }
+
       const response = renderResponse({
-        type: config.messageType || (buttons.length ? "buttons" : "text"),
+        type: responseType,
         text: config.text,
         header: config.header,
         footer: config.footer,
         mediaUrl: config.mediaUrl,
         filename: config.filename,
-        options: buttons.map(b => ({
-            id: b.id,
-            title: b.label,
-            description: b.description,
-        }))
+        options: responseOptions
       }, variables);
       
       await sendAndSaveMessage({ account, contact, conversation, response, senderType: "bot" });
