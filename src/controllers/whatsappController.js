@@ -991,6 +991,25 @@ export async function updateWhatsappBusinessProfile(
         metaPayload,
         "Update WhatsApp business profile"
       );
+
+      const refreshedProfile = await graphGet(
+        `/${account.phoneNumberId}/whatsapp_business_profile`,
+        accessToken,
+        {
+          fields:
+            "about,description,profile_picture_url",
+        },
+        "Fetch WhatsApp business profile"
+      );
+
+      console.log("[wa-profile] Meta profile after update", {
+        accountId: String(account._id),
+        requestedProfilePictureUrl: profilePictureUrl || "",
+        metaProfilePictureUrl:
+          refreshedProfile?.data?.[0]
+            ?.profile_picture_url ||
+          "",
+      });
     }
 
     account.profileDisplayName =

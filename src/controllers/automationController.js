@@ -100,6 +100,11 @@ function safeUploadFileName(fileName = "upload.bin") {
   return `${Date.now()}-${baseName}`;
 }
 
+function safeContentType(contentType = "") {
+  const value = String(contentType || "").toLowerCase().trim();
+  return /^image\/(jpeg|jpg|png|webp)$/.test(value) ? value.replace("image/jpg", "image/jpeg") : "application/octet-stream";
+}
+
 async function uploadRequestFile(req, folder) {
   const buffer = req.body.fileBuffer
     ? Buffer.from(req.body.fileBuffer)
@@ -120,7 +125,8 @@ async function uploadRequestFile(req, folder) {
   return uploadToBunny(
     buffer,
     safeUploadFileName(req.body.fileName),
-    folder
+    folder,
+    safeContentType(req.body.mimeType || req.body.contentType)
   );
 }
 

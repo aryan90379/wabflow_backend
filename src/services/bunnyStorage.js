@@ -3,7 +3,7 @@ import axios from "axios";
 const BUNNY_BASE_URL =
   process.env.BUNNY_STORAGE_BASE_URL || "https://uk.storage.bunnycdn.com";
 
-export const uploadToBunny = async (fileBuffer, fileName, folder = "uploads") => {
+export const uploadToBunny = async (fileBuffer, fileName, folder = "uploads", contentType = "application/octet-stream") => {
   if (!process.env.BUNNY_STORAGE_ZONE) {
     throw new Error("BUNNY_STORAGE_ZONE is missing.");
   }
@@ -28,7 +28,7 @@ export const uploadToBunny = async (fileBuffer, fileName, folder = "uploads") =>
     await axios.put(storageUrl, fileBuffer, {
       headers: {
         AccessKey: process.env.BUNNY_API_KEY,
-        "Content-Type": "application/octet-stream",
+        "Content-Type": contentType || "application/octet-stream",
       },
       maxContentLength: Infinity,
       maxBodyLength: Infinity,
