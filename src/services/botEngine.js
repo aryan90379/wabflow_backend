@@ -255,6 +255,11 @@ function textLooksLikeRoomListRequest(text = "") {
   return /\b(view|show|list|available|see)\b/.test(normalized) && /\b(room|rooms|suite|suites)\b/.test(normalized);
 }
 
+function textLooksLikeBookingRequest(text = "") {
+  const normalized = String(text || "").toLowerCase();
+  return /\b(book|booking|appointment|visit|reserve|schedule)\b/.test(normalized);
+}
+
 async function sendRoomList({ business, account, contact, conversation, message = "Here are our available rooms. Tap Select under a room to continue." }) {
   const rooms = await ServiceItem.find({
     businessId: business._id,
@@ -829,6 +834,32 @@ export async function processIncomingMessage(event) {
         confidence,
         actionTaken,
         flowId: activeFlowResult.flow?._id,
+      });
+      return;
+    }
+
+    if (intent === "booking_request" || textLooksLikeBookingRequest(event.text || event.selectionTitle || "")) {
+      console.log("[booking] Handling booking request fallback", {
+        businessId: String(business._id),
+        selectionId: event.selectionId || "",
+        text: event.text || event.selectionTitle || "",
+      });
+      const result = await handleSendBookingMetaFlow({
+        business,
+        account,
+        contact,
+        conversation,
+        event,
+      });
+
+      await writeDecision({
+        businessId: business._id,
+        conversationId: conversation._id,
+        messageId: inboundMessage._id,
+        intent: "booking_request",
+        confidence: Math.max(confidence || 0, 0.9),
+        actionTaken: result.action || "sent_booking_flow",
+        metadata: { reason: "booking_request_fallback" },
       });
       return;
     }
