@@ -143,6 +143,122 @@ const graphPost = async (
   );
 };
 
+const normalizeDisplayName = (value) =>
+  String(value || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+
+const displayNamesMatch = (first, second) =>
+  Boolean(first && second) &&
+  normalizeDisplayName(first) === normalizeDisplayName(second);
+
+function syncOfficialDisplayNameRequest(account) {
+  const requested =
+    account.officialDisplayNameRequested ||
+    account.profileDisplayName ||
+    "";
+
+  if (!requested) {
+    account.officialDisplayNameRequestStatus = "none";
+    account.officialDisplayNameApprovedAt = null;
+    return;
+  }
+
+  if (displayNamesMatch(requested, account.verifiedName)) {
+    account.officialDisplayNameRequestStatus = "approved";
+    account.officialDisplayNameApprovedAt =
+      account.officialDisplayNameApprovedAt || new Date();
+    return;
+  }
+
+  account.officialDisplayNameRequestStatus = "pending";
+  account.officialDisplayNameApprovedAt = null;
+}
+
+function consumeOfficialDisplayNameChangeSlot(account, requestedName) {
+  const limit = env.whatsappDisplayNameChangeLimit;
+
+  if (!limit || limit < 1) {
+    return;
+  }
+
+  const windowDays =
+    env.whatsappDisplayNameChangeWindowDays || 30;
+  const windowMs = windowDays * 24 * 60 * 60 * 1000;
+  const now = new Date();
+  const windowStart =
+    account.officialDisplayNameChangeWindowStart;
+
+  if (
+    !windowStart ||
+    now.getTime() - windowStart.getTime() >= windowMs
+  ) {
+    account.officialDisplayNameChangeWindowStart = now;
+    account.officialDisplayNameChangeCount = 0;
+  }
+
+  if (account.officialDisplayNameChangeCount >= limit) {
+    const error = new Error(
+      `Official WhatsApp name can only be requested ${limit} time${
+        limit === 1 ? "" : "s"
+      } every ${windowDays} days.`
+    );
+    error.status = 429;
+    throw error;
+  }
+
+  account.officialDisplayNameChangeCount =
+    (account.officialDisplayNameChangeCount || 0) + 1;
+  account.officialDisplayNameRequestedAt = now;
+  account.officialDisplayNameRequested = requestedName;
+}
+
+async function refreshWhatsappAccountIdentity(account) {
+  if (!account || account.status !== "active") {
+    return account;
+  }
+
+  try {
+    const { accessToken } =
+      await getWhatsappAccountWithToken(account._id);
+
+    const phone = await graphGet(
+      `/${account.phoneNumberId}`,
+      accessToken,
+      {
+        fields:
+          "id,display_phone_number,verified_name",
+      },
+      "Refresh WhatsApp phone identity"
+    );
+
+    account.displayPhoneNumber =
+      phone?.display_phone_number ||
+      account.displayPhoneNumber ||
+      "";
+    account.verifiedName =
+      phone?.verified_name || account.verifiedName || "";
+    account.officialDisplayNameLastSyncedAt = new Date();
+
+    syncOfficialDisplayNameRequest(account);
+
+    await account.save();
+  } catch (error) {
+    console.warn(
+      "[wa-profile] Could not refresh Meta display name",
+      {
+        accountId: String(account._id),
+        phoneNumberId: account.phoneNumberId,
+        error: error.message,
+        meta: error.meta || null,
+      }
+    );
+  }
+
+  return account;
+}
+
 function imageContentTypeFromUrl(url = "") {
   const lower = String(url || "").toLowerCase();
   if (lower.endsWith(".png")) return "image/png";
@@ -873,9 +989,16 @@ export async function listWhatsappAccounts(
         connectedAt: -1,
       });
 
+  const refreshedAccounts =
+    await Promise.all(
+      accounts.map((account) =>
+        refreshWhatsappAccountIdentity(account)
+      )
+    );
+
   return res.json({
     success: true,
-    accounts,
+    accounts: refreshedAccounts,
   });
 }
 
@@ -1042,6 +1165,19 @@ export async function updateWhatsappBusinessProfile(
     )
       .trim();
 
+  const previousRequestedName =
+    account.officialDisplayNameRequested ||
+    account.profileDisplayName ||
+    account.verifiedName ||
+    "";
+
+  const officialNameChanged =
+    Boolean(displayName) &&
+    !displayNamesMatch(
+      displayName,
+      previousRequestedName
+    );
+
   const baseMetaPayload = {
     messaging_product:
       "whatsapp",
@@ -1107,8 +1243,27 @@ export async function updateWhatsappBusinessProfile(
       });
     }
 
+    if (
+      officialNameChanged &&
+      !displayNamesMatch(
+        displayName,
+        account.verifiedName
+      )
+    ) {
+      consumeOfficialDisplayNameChangeSlot(
+        account,
+        displayName
+      );
+    } else if (displayName) {
+      account.officialDisplayNameRequested =
+        displayName;
+    }
+
     account.profileDisplayName =
       displayName;
+    syncOfficialDisplayNameRequest(
+      account
+    );
     account.profileAbout = about;
     account.profileDescription =
       description;
@@ -1121,7 +1276,11 @@ export async function updateWhatsappBusinessProfile(
       success: true,
       account,
       message:
-        "WhatsApp profile updated.",
+        account
+          .officialDisplayNameRequestStatus ===
+        "pending"
+          ? "WhatsApp profile updated. Official name request is saved here and will show in WhatsApp after Meta approval."
+          : "WhatsApp profile updated.",
     });
   } catch (error) {
     console.error(

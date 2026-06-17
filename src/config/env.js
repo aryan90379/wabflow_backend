@@ -23,6 +23,8 @@ export const env = {
   metaGraphVersion: process.env.META_GRAPH_VERSION || "v25.0",
   metaFlowJsonVersion: process.env.META_FLOW_JSON_VERSION || "7.2",
   metaVerifyToken: process.env.META_VERIFY_TOKEN || "",
+  whatsappDisplayNameChangeLimit: Number(process.env.WHATSAPP_DISPLAY_NAME_CHANGE_LIMIT || 2),
+  whatsappDisplayNameChangeWindowDays: Number(process.env.WHATSAPP_DISPLAY_NAME_CHANGE_WINDOW_DAYS || 30),
   whatsappPin: process.env.WHATSAPP_2FA_PIN || "123456",
   tokenEncryptionKey: process.env.TOKEN_ENCRYPTION_KEY || "",
 };
