@@ -212,7 +212,12 @@ export async function prepareBookingFlowImages(config = {}) {
         return room;
       }
 
-      const imageResult = await imageUrlToBase64(room.imageUrl);
+      let optimizedUrl = room.imageUrl;
+      if (optimizedUrl.includes("wabflow.b-cdn.net") && !optimizedUrl.includes("?")) {
+        optimizedUrl += "?width=400";
+      }
+
+      const imageResult = await imageUrlToBase64(optimizedUrl);
       return {
         ...room,
         imageBase64: imageResult.imageBase64,

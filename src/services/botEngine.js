@@ -46,23 +46,41 @@ export async function handleSendBookingMetaFlow({ business, account, contact, co
   let flowConfigId = account.bookingFlowConfigId;
   const resolvedBookingConfig = { ...bookingConfig };
 
-  if (serviceItemId && !(resolvedBookingConfig.rooms || []).length) {
-    const room = await ServiceItem.findOne({
-      _id: serviceItemId,
-      businessId: business._id,
-      type: "room",
-      active: { $ne: false },
-    }).lean();
+  if (!(resolvedBookingConfig.rooms || []).length) {
+    if (serviceItemId) {
+      const room = await ServiceItem.findOne({
+        _id: serviceItemId,
+        businessId: business._id,
+        type: "room",
+        active: { $ne: false },
+      }).lean();
 
-    if (room) {
-      resolvedBookingConfig.rooms = [{
+      if (room) {
+        resolvedBookingConfig.rooms = [{
+          id: String(room._id),
+          name: room.name,
+          description: room.description || "",
+          imageUrl: room.images?.[0] || "",
+          price: room.price,
+          currency: room.currency || "INR",
+        }];
+      }
+    } else {
+      const rooms = await ServiceItem.find({
+        businessId: business._id,
+        type: "room",
+        active: { $ne: false },
+      }).limit(10).lean();
+
+      resolvedBookingConfig.rooms = rooms.map(room => ({
         id: String(room._id),
         name: room.name,
         description: room.description || "",
         imageUrl: room.images?.[0] || "",
         price: room.price,
         currency: room.currency || "INR",
-      }];
+      }));
+      resolvedBookingConfig.roomSelection = rooms.length > 0;
     }
   }
 
