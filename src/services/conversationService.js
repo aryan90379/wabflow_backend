@@ -126,6 +126,13 @@ export async function sendAndSaveMessage({
   sentByName = "",
   sentByAvatarUrl = "",
 }) {
+  const messageType =
+    response.type === "buttons"
+      ? "button"
+      : response.type === "list"
+        ? "list"
+        : response.type || "text";
+
   const temporaryMessage = await Message.create({
     businessId: account.businessId,
     conversationId: conversation._id,
@@ -137,8 +144,12 @@ export async function sendAndSaveMessage({
     sentByMemberId,
     sentByName,
     sentByAvatarUrl,
-    type: response.type === "buttons" ? "button" : response.type === "list" ? "list" : response.type || "text",
+    type: messageType,
     text: response.text || "",
+    interactive: response.type === "flow" ? {
+      id: response.flowId || "",
+      title: response.buttonText || "Open Form",
+    } : undefined,
     mediaUrl: response.mediaUrl || "",
     status: "queued",
   });

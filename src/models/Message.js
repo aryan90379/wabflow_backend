@@ -24,7 +24,7 @@ const messageSchema = new mongoose.Schema(
     sentByAvatarUrl: { type: String, default: "" },
     type: {
       type: String,
-      enum: ["text", "image", "video", "audio", "document", "button", "list", "location", "unknown"],
+      enum: ["text", "image", "video", "audio", "document", "button", "list", "flow", "flow_reply", "location", "unknown"],
       default: "text",
     },
     text: { type: String, default: "" },
