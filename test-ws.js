@@ -1,6 +1,6 @@
 import { io } from "socket.io-client";
 
-const socket = io("https://wabflow.synqra.in", {
+const socket = io("https://api.wabflow.synqra.in", {
   transports: ["websocket", "polling"],
 });
 

@@ -4,7 +4,7 @@ import { connectWhatsappFromOAuthCode } from "../services/metaWhatsappOAuth.serv
 
 const CALLBACK_URL =
   process.env.META_WHATSAPP_REDIRECT_URI ||
-  "https://wabflow.synqra.in/api/meta/whatsapp/callback";
+  "https://api.wabflow.synqra.in/api/meta/whatsapp/callback";
 
 const APP_DEEPLINK = "wabflow://whatsapp/connect";
 
