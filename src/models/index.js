@@ -1,6 +1,7 @@
 export { User } from "./User.js";
 export { Business } from "./Business.js";
 export { WhatsappAccount } from "./WhatsappAccount.js";
+export { WhatsappMessageTemplate } from "./WhatsappMessageTemplate.js";
 export { Contact } from "./Contact.js";
 export { Conversation } from "./Conversation.js";
 export { Message } from "./Message.js";

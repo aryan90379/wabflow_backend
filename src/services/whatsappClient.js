@@ -141,6 +141,27 @@ export async function sendWhatsappPayload(
   return parseMetaResponse(response);
 }
 
+export async function sendWhatsappTemplatePayload(
+  accountId,
+  to,
+  template
+) {
+  if (!template?.name) {
+    throw new Error("WhatsApp template name is required.");
+  }
+
+  return sendWhatsappPayload(accountId, {
+    to,
+    type: "template",
+    template: {
+      name: template.name,
+      language: {
+        code: template.language || "en_US",
+      },
+    },
+  });
+}
+
 function sanitizeOptions(
   options = [],
   limit = 3

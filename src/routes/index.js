@@ -63,6 +63,9 @@ import {
 import {
   getConversation,
   listConversations,
+  listWhatsappMessageTemplates,
+  createWhatsappMessageTemplate,
+  sendWhatsappMessageTemplate,
   listMessages,
   markConversationRead,
   sendHumanMessage,
@@ -153,6 +156,9 @@ businessRouter.post("/flows/generate-booking", requirePermission("flows.create")
 businessRouter.post("/flows/:flowId/archive", requirePermission("flows.edit"), asyncHandler(archiveFlow));
 
 businessRouter.get("/conversations", requirePermission("inbox.view"), asyncHandler(listConversations));
+businessRouter.get("/message-templates", requirePermission("inbox.view"), asyncHandler(listWhatsappMessageTemplates));
+businessRouter.post("/message-templates", requirePermission("inbox.reply"), asyncHandler(createWhatsappMessageTemplate));
+businessRouter.post("/message-templates/:templateId/send", requirePermission("inbox.reply"), asyncHandler(sendWhatsappMessageTemplate));
 businessRouter.get("/conversations/:conversationId", requirePermission("inbox.view"), asyncHandler(getConversation));
 businessRouter.get("/conversations/:conversationId/messages", requirePermission("inbox.view"), asyncHandler(listMessages));
 businessRouter.post("/conversations/:conversationId/messages", requirePermission("inbox.reply"), asyncHandler(sendHumanMessage));
