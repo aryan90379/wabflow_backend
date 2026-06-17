@@ -831,6 +831,22 @@ export async function continueFlowV2({ flow, business, account, contact, convers
     if (step.type === "action") {
       if (step.config?.actionType === "send_meta_flow") {
         const payload = step.config?.payload || {};
+
+        if (payload.flowConfigId === "booking") {
+          const variables = mapToObject(conversation.botState.variables);
+          conversation.botState.currentNodeId = step.id;
+          conversation.botState.awaitingInput = {
+            nodeId: step.id,
+            fieldKey: "meta_flow_response",
+            saveTo: "booking",
+            validation: {},
+            nextNodeId: step.config?.nextStepId || "",
+          };
+          conversation.botState.updatedAt = new Date();
+          await conversation.save();
+          return { handled: true, action: "send_booking_meta_flow", flow, step, bookingConfig: variables._bookingConfig || {} };
+        }
+
         const response = {
           type: "flow",
           flowId: payload.flowId,
