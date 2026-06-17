@@ -44,7 +44,7 @@ function hashFlowDefinition(flowJson) {
 function getBookingFlowCopy(business = {}, roomName = "") {
   const type = String(business.businessType || business.type || "").toLowerCase();
 
-  if (type === "pg" || type === "apartment") {
+  if (type === "pg" || type === "apartment" || type.includes("hostel")) {
     return {
       buttonText: "Book Visit",
       text: roomName
@@ -53,7 +53,7 @@ function getBookingFlowCopy(business = {}, roomName = "") {
     };
   }
 
-  if (type === "hotel" || type.includes("hostel")) {
+  if (type === "hotel") {
     return {
       buttonText: "Book Room",
       text: roomName
@@ -68,6 +68,53 @@ function getBookingFlowCopy(business = {}, roomName = "") {
   };
 }
 
+async function ensureBookingMetaFlow({ business, account, bookingConfig = {}, flowTitle = "Book Appointment" }) {
+  let flowId = account.bookingFlowId;
+  let flowConfigId = account.bookingFlowConfigId;
+  const preparedBookingConfig = await prepareBookingFlowImages({
+    ...bookingConfig,
+    flowTitle,
+  });
+  const flowJson = generateBookingFlowJson({ ...preparedBookingConfig, flowConfigId: "booking" });
+  const flowDefinitionHash = hashFlowDefinition(flowJson);
+  const shouldCreateFlow =
+    !flowId ||
+    !flowConfigId ||
+    account.bookingFlowDefinitionHash !== flowDefinitionHash;
+
+  if (!shouldCreateFlow) {
+    return { flowId, flowConfigId };
+  }
+
+  const { account: tokenAccount, accessToken } = await getWhatsappAccountWithToken(account._id);
+  await ensurePhoneNumberFlowPublicKey(tokenAccount, accessToken);
+  const flowName = `Booking Flow ${Date.now()}`;
+  const flowCreated = await createFlow(account.wabaId, accessToken, flowName);
+
+  const assetResult = await updateFlowAssets(flowCreated.id, accessToken, flowJson);
+  if (assetResult?.validation_errors?.length) {
+    console.error("Meta Flow JSON validation errors:", assetResult.validation_errors);
+  }
+  await publishFlow(flowCreated.id, accessToken);
+
+  flowId = flowCreated.id;
+  flowConfigId = "booking";
+
+  await WhatsappAccount.updateOne(
+    { _id: account._id },
+    {
+      bookingFlowId: flowId,
+      bookingFlowConfigId: flowConfigId,
+      bookingFlowDefinitionHash: flowDefinitionHash,
+    }
+  );
+  account.bookingFlowId = flowId;
+  account.bookingFlowConfigId = flowConfigId;
+  account.bookingFlowDefinitionHash = flowDefinitionHash;
+
+  return { flowId, flowConfigId };
+}
+
 export async function handleSendBookingMetaFlow({
   business,
   account,
@@ -80,8 +127,6 @@ export async function handleSendBookingMetaFlow({
   messageText = "",
   mediaUrl = "",
 }) {
-  let flowId = account.bookingFlowId;
-  let flowConfigId = account.bookingFlowConfigId;
   const resolvedBookingConfig = { ...bookingConfig };
   let selectedRoomName = "";
   let selectedRoom = null;
@@ -129,56 +174,26 @@ export async function handleSendBookingMetaFlow({
   }
 
   const bookingCopy = getBookingFlowCopy(business, selectedRoomName);
-  const preparedBookingConfig = await prepareBookingFlowImages({
-    ...resolvedBookingConfig,
-    flowTitle: bookingCopy.buttonText,
-  });
-  const flowJson = generateBookingFlowJson({ ...preparedBookingConfig, flowConfigId: "booking" });
-  const flowDefinitionHash = hashFlowDefinition(flowJson);
-  const shouldCreateFlow =
-    !flowId ||
-    !flowConfigId ||
-    account.bookingFlowDefinitionHash !== flowDefinitionHash;
+  let flowId;
+  let flowConfigId;
 
-  if (shouldCreateFlow) {
-    try {
-      const { account: tokenAccount, accessToken } = await getWhatsappAccountWithToken(account._id);
-      await ensurePhoneNumberFlowPublicKey(tokenAccount, accessToken);
-      const flowName = `Booking Flow ${Date.now()}`;
-      const flowCreated = await createFlow(account.wabaId, accessToken, flowName);
-      
-      const assetResult = await updateFlowAssets(flowCreated.id, accessToken, flowJson);
-      if (assetResult?.validation_errors?.length) {
-        console.error("Meta Flow JSON validation errors:", assetResult.validation_errors);
-      }
-      await publishFlow(flowCreated.id, accessToken);
-
-      flowId = flowCreated.id;
-      flowConfigId = "booking";
-      
-      await WhatsappAccount.updateOne(
-        { _id: account._id },
-        {
-          bookingFlowId: flowId,
-          bookingFlowConfigId: flowConfigId,
-          bookingFlowDefinitionHash: flowDefinitionHash,
-        }
-      );
-      account.bookingFlowId = flowId;
-      account.bookingFlowConfigId = flowConfigId;
-      account.bookingFlowDefinitionHash = flowDefinitionHash;
-    } catch (e) {
-      console.error("Meta Flow Auto Gen Error:", e.response?.data || e.message);
-      // Fallback message if flow creation fails
-      await sendAndSaveMessage({
-        account,
-        contact,
-        conversation,
-        response: { type: "text", text: "Please tell us what you need, and we will get back to you shortly." },
-        senderType: "bot",
-      });
-      return { handled: true, action: "sent_fallback" };
-    }
+  try {
+    ({ flowId, flowConfigId } = await ensureBookingMetaFlow({
+      business,
+      account,
+      bookingConfig: resolvedBookingConfig,
+      flowTitle: bookingCopy.buttonText,
+    }));
+  } catch (e) {
+    console.error("Meta Flow Auto Gen Error:", e.response?.data || e.message);
+    await sendAndSaveMessage({
+      account,
+      contact,
+      conversation,
+      response: { type: "text", text: "Please tell us what you need, and we will get back to you shortly." },
+      senderType: "bot",
+    });
+    return { handled: true, action: "sent_fallback" };
   }
 
   const response = {
@@ -240,7 +255,7 @@ function textLooksLikeRoomListRequest(text = "") {
   return /\b(view|show|list|available|see)\b/.test(normalized) && /\b(room|rooms|suite|suites)\b/.test(normalized);
 }
 
-async function sendRoomList({ business, account, contact, conversation, event, message = "Here are our available rooms. Tap Book to reserve." }) {
+async function sendRoomList({ business, account, contact, conversation, message = "Here are our available rooms. Tap Select under a room to continue." }) {
   const rooms = await ServiceItem.find({
     businessId: business._id,
     type: "room",
@@ -254,6 +269,7 @@ async function sendRoomList({ business, account, contact, conversation, event, m
     await sendAndSaveMessage({ account, contact, conversation, response, senderType: "bot" });
     return { response, rooms };
   }
+  console.log(`[room-list] Sending ${rooms.length} room cards for business=${business._id}`);
 
   // Send intro message
   await sendAndSaveMessage({
@@ -262,22 +278,44 @@ async function sendRoomList({ business, account, contact, conversation, event, m
     senderType: "bot"
   });
 
-  // Send each room as a direct Flow CTA so tapping the room card opens booking immediately.
+  // Send each room as a lightweight image button card. Selecting one opens the booking Flow.
   for (const room of rooms) {
     const priceStr = room.price !== null && room.price !== undefined ? `\nPrice: ${room.currency || "INR"} ${room.price}` : "";
     const bodyText = `*${room.name}*${priceStr}\n\n${room.description || ""}`.trim().slice(0, 1024);
-
-    await handleSendBookingMetaFlow({
-      business,
-      account,
-      contact,
-      conversation,
-      event,
-      serviceItemId: room._id,
-      includeSelectedRoomInFlow: false,
-      messageText: bodyText,
+    const response = {
+      type: "buttons",
+      text: bodyText,
       mediaUrl: room.images && room.images.length > 0 ? room.images[0] : "",
-    });
+      options: [
+        { id: `book_room_${room._id}`, title: "Select" },
+      ],
+    };
+
+    try {
+      await sendAndSaveMessage({ account, contact, conversation, response, senderType: "bot" });
+    } catch (error) {
+      console.error("[room-list] Failed to send room card", {
+        roomId: String(room._id),
+        error: error.response?.data || error.message,
+      });
+
+      if (response.mediaUrl) {
+        try {
+          await sendAndSaveMessage({
+            account,
+            contact,
+            conversation,
+            response: { ...response, mediaUrl: "" },
+            senderType: "bot",
+          });
+        } catch (retryError) {
+          console.error("[room-list] Failed to send room card retry", {
+            roomId: String(room._id),
+            error: retryError.response?.data || retryError.message,
+          });
+        }
+      }
+    }
   }
 
   conversation.botState.updatedAt = new Date();
@@ -639,8 +677,7 @@ export async function processIncomingMessage(event) {
         account,
         contact,
         conversation,
-        event,
-        message: "Here are the available room options. Tap a room to see details and book.",
+        message: "Here are the available room options. Tap Select under a room to continue.",
       });
 
       await writeDecision({
