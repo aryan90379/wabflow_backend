@@ -58,8 +58,7 @@ import {
   updateRule,
   updateService,
   uploadMedia,
-  uploadServiceImage,
-  archiveFlow
+  uploadServiceImage
 } from "../controllers/automationController.js";
 import {
   getConversation,
@@ -84,7 +83,7 @@ import {
   updateHandoff,
   updateLead,
 } from "../controllers/crmController.js";
-import { getBotSettings, updateBotSettings } from "../controllers/botController.js";
+
 import { generateBookingFlow } from "../controllers/metaFlowController.js";
 import { receiveWebhook, verifyWebhook } from "../controllers/webhookController.js";
 
@@ -148,7 +147,7 @@ businessRouter.post("/flows", requirePermission("flows.create"), asyncHandler(cr
 businessRouter.get("/flows/:flowId", requirePermission("flows.view"), asyncHandler(getFlow));
 businessRouter.patch("/flows/:flowId", requirePermission("flows.edit"), asyncHandler(updateFlow));
 businessRouter.post("/flows/:flowId/publish", requirePermission("flows.edit"), asyncHandler(publishFlow));
-businessRouter.delete("/flows/:flowId", requirePermission("flows.delete"), asyncHandler(deleteFlow));
+
 businessRouter.post("/flows/generate-booking", requirePermission("flows.create"), asyncHandler(generateBookingFlow));
 businessRouter.post("/flows/:flowId/archive", requirePermission("flows.edit"), asyncHandler(archiveFlow));
 
