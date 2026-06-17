@@ -52,6 +52,10 @@ function makeFallbackAppleEmail(appleId) {
   return `apple_${hash}@apple-user.wabflow.local`;
 }
 
+function isFallbackAppleEmail(email = "") {
+  return /^apple_[a-f0-9]{24}@apple-user\.wabflow\.local$/i.test(String(email || ""));
+}
+
 function cleanName(...parts) {
   return parts
     .filter(Boolean)
@@ -102,12 +106,14 @@ export async function googleAuth(req, res) {
       user = await User.create({
         googleId,
         email,
+        googleEmail: email,
         name: payload.name || "",
         profilepic: payload.picture || "",
         lastLoginAt: new Date(),
       });
     } else {
       user.googleId = googleId;
+      user.googleEmail = email;
       user.email = user.email || email;
       user.name = payload.name || user.name;
       user.profilepic = payload.picture || user.profilepic;
@@ -184,8 +190,17 @@ export async function linkGoogleAuth(req, res) {
       });
     }
 
+    const emailUser = await User.findOne({ email });
+    if (emailUser && String(emailUser._id) !== String(user._id)) {
+      return res.status(409).json({
+        success: false,
+        error: "This Google email is already used by another WabFlow user.",
+      });
+    }
+
     user.googleId = googleId;
-    user.email = user.email || email;
+    user.googleEmail = email;
+    if (!user.email || isFallbackAppleEmail(user.email)) user.email = email;
     user.name = user.name || payload.name || "";
     user.profilepic = user.profilepic || payload.picture || "";
     await user.save();
@@ -240,7 +255,8 @@ export async function appleAuth(req, res) {
       });
     }
 
-    let finalEmail = String(claims.email || email || "").trim().toLowerCase();
+    const realAppleEmail = String(claims.email || email || "").trim().toLowerCase();
+    let finalEmail = realAppleEmail;
 
     if (!finalEmail) {
       finalEmail = makeFallbackAppleEmail(appleId);
@@ -257,6 +273,7 @@ export async function appleAuth(req, res) {
 
       if (user) {
         user.appleId = appleId;
+        user.appleEmail = realAppleEmail || user.appleEmail || "";
         if (suppliedName && !user.name) user.name = suppliedName;
         user.lastLoginAt = new Date();
         await user.save();
@@ -264,12 +281,14 @@ export async function appleAuth(req, res) {
         user = await User.create({
           appleId,
           email: finalEmail,
+          appleEmail: realAppleEmail,
           name: suppliedName || "Apple User",
           lastLoginAt: new Date(),
         });
       }
     } else {
       if (!user.email) user.email = finalEmail;
+      user.appleEmail = realAppleEmail || user.appleEmail || "";
       if (suppliedName && !user.name) user.name = suppliedName;
       user.lastLoginAt = new Date();
       await user.save();
@@ -357,6 +376,7 @@ export async function linkAppleAuth(req, res) {
       cleanName(fullName?.givenName, fullName?.familyName);
 
     user.appleId = appleId;
+    user.appleEmail = finalEmail || user.appleEmail || "";
     user.email = user.email || finalEmail || makeFallbackAppleEmail(appleId);
     if (suppliedName && !user.name) user.name = suppliedName;
     await user.save();
