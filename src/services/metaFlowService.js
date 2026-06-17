@@ -213,8 +213,8 @@ export async function prepareBookingFlowImages(config = {}) {
       }
 
       let optimizedUrl = room.imageUrl;
-      if (optimizedUrl.includes("wabflow.b-cdn.net") && !optimizedUrl.includes("?")) {
-        optimizedUrl += "?width=400";
+      if (!optimizedUrl.includes("wsrv.nl")) {
+        optimizedUrl = `https://wsrv.nl/?url=${encodeURIComponent(optimizedUrl)}&w=500&q=80&output=jpg`;
       }
 
       const imageResult = await imageUrlToBase64(optimizedUrl);
