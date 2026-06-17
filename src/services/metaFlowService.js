@@ -121,6 +121,68 @@ function buildHourlyRangeSlots(from = "09:00", to = "18:00") {
   return slots;
 }
 
+function safeImageUrl(value = "") {
+  const url = String(value || "").trim();
+  return /^https?:\/\//i.test(url) ? url : "";
+}
+
+function formatRoomDetail(room = {}) {
+  const parts = [];
+
+  if (room.price !== null && room.price !== undefined && room.price !== "") {
+    parts.push(`${room.currency || "INR"} ${room.price}`);
+  }
+
+  if (room.description) {
+    parts.push(String(room.description).trim());
+  }
+
+  return parts
+    .filter(Boolean)
+    .join(" - ")
+    .slice(0, 300);
+}
+
+function buildRoomPreviewComponents(rooms = []) {
+  const roomsWithImages = rooms
+    .map((room) => ({
+      ...room,
+      imageUrl: safeImageUrl(room.imageUrl),
+      detail: formatRoomDetail(room),
+    }))
+    .filter((room) => room.imageUrl)
+    .slice(0, 3);
+
+  if (!roomsWithImages.length) {
+    return [];
+  }
+
+  return [
+    {
+      type: "TextSubheading",
+      text: roomsWithImages.length === 1 ? "Selected room" : "Room options",
+    },
+    ...roomsWithImages.flatMap((room) => [
+      {
+        type: "TextBody",
+        text: String(room.name).slice(0, 80),
+      },
+      {
+        type: "Image",
+        src: room.imageUrl,
+        height: 160,
+        "scale-type": "cover",
+      },
+      ...(room.detail
+        ? [{
+            type: "TextCaption",
+            text: room.detail,
+          }]
+        : []),
+    ]),
+  ];
+}
+
 /**
  * Generates the Flow JSON based on the booking configuration.
  */
@@ -132,7 +194,15 @@ export function generateBookingFlowJson(config) {
   };
   const rooms = (config.rooms || [])
     .filter((room) => room.id && room.name)
-    .slice(0, 10);
+    .slice(0, 10)
+    .map((room) => ({
+      id: room.id,
+      name: room.name,
+      description: room.description || "",
+      imageUrl: room.imageUrl || "",
+      price: room.price ?? null,
+      currency: room.currency || "INR",
+    }));
   const shouldSelectRoom = Boolean(config.roomSelection && rooms.length);
   const timeSlots = buildTimeSlotOptions(config.availability || {});
 
@@ -163,6 +233,7 @@ export function generateBookingFlowJson(config) {
     layout: {
       type: "SingleColumnLayout",
       children: [
+        ...buildRoomPreviewComponents(rooms),
         {
           type: "Form",
           name: "booking_form",

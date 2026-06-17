@@ -43,7 +43,29 @@ function hashFlowDefinition(flowJson) {
 export async function handleSendBookingMetaFlow({ business, account, contact, conversation, serviceItemId, bookingConfig = {}, event }) {
   let flowId = account.bookingFlowId;
   let flowConfigId = account.bookingFlowConfigId;
-  const flowJson = generateBookingFlowJson({ ...bookingConfig, flowConfigId: "booking" });
+  const resolvedBookingConfig = { ...bookingConfig };
+
+  if (serviceItemId && !(resolvedBookingConfig.rooms || []).length) {
+    const room = await ServiceItem.findOne({
+      _id: serviceItemId,
+      businessId: business._id,
+      type: "room",
+      active: { $ne: false },
+    }).lean();
+
+    if (room) {
+      resolvedBookingConfig.rooms = [{
+        id: String(room._id),
+        name: room.name,
+        description: room.description || "",
+        imageUrl: room.images?.[0] || "",
+        price: room.price,
+        currency: room.currency || "INR",
+      }];
+    }
+  }
+
+  const flowJson = generateBookingFlowJson({ ...resolvedBookingConfig, flowConfigId: "booking" });
   const flowDefinitionHash = hashFlowDefinition(flowJson);
   const shouldCreateFlow =
     !flowId ||
