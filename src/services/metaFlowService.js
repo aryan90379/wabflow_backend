@@ -265,7 +265,6 @@ function buildRoomPreviewComponents(rooms = []) {
       imageBase64: String(room.imageBase64 || "").trim(),
       detail: formatRoomDetail(room),
     }))
-    .filter((room) => room.imageBase64)
     .slice(0, 3);
 
   if (!roomsWithImages.length) {
@@ -282,12 +281,14 @@ function buildRoomPreviewComponents(rooms = []) {
         type: "TextBody",
         text: String(room.name).slice(0, 80),
       },
-      {
-        type: "Image",
-        src: room.imageBase64,
-        height: 160,
-        "scale-type": "cover",
-      },
+      ...(room.imageBase64 
+        ? [{
+            type: "Image",
+            src: room.imageBase64,
+            height: 160,
+            "scale-type": "cover",
+          }]
+        : []),
       ...(room.detail
         ? [{
             type: "TextCaption",
@@ -361,7 +362,7 @@ export function generateBookingFlowJson(config) {
               required: true,
               "data-source": rooms.map((room) => ({
                 id: String(room.id),
-                title: String(room.name).slice(0, 30),
+                title: room.price ? `${String(room.name).slice(0, 20)} (${room.currency || "INR"} ${room.price})` : String(room.name).slice(0, 30),
               })),
             }] : []),
             ...(config.collectFields?.name !== false ? [{
