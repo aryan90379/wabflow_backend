@@ -41,31 +41,72 @@ function hashFlowDefinition(flowJson) {
     .digest("hex");
 }
 
-export async function handleSendBookingMetaFlow({ business, account, contact, conversation, serviceItemId, bookingConfig = {}, event }) {
+function getBookingFlowCopy(business = {}, roomName = "") {
+  const type = String(business.businessType || business.type || "").toLowerCase();
+
+  if (type === "pg" || type === "apartment") {
+    return {
+      buttonText: "Book Visit",
+      text: roomName
+        ? `Tap below to book a visit for ${roomName}.`
+        : "Tap below to book a visit.",
+    };
+  }
+
+  if (type === "hotel" || type.includes("hostel")) {
+    return {
+      buttonText: "Book Room",
+      text: roomName
+        ? `Tap below to book ${roomName}.`
+        : "Tap below to book a room.",
+    };
+  }
+
+  return {
+    buttonText: "Book Appointment",
+    text: "Please tap the button below to complete your booking.",
+  };
+}
+
+export async function handleSendBookingMetaFlow({
+  business,
+  account,
+  contact,
+  conversation,
+  serviceItemId,
+  bookingConfig = {},
+  event,
+  includeSelectedRoomInFlow = true,
+  messageText = "",
+  mediaUrl = "",
+}) {
   let flowId = account.bookingFlowId;
   let flowConfigId = account.bookingFlowConfigId;
   const resolvedBookingConfig = { ...bookingConfig };
+  let selectedRoomName = "";
+  let selectedRoom = null;
+
+  if (serviceItemId) {
+    selectedRoom = await ServiceItem.findOne({
+      _id: serviceItemId,
+      businessId: business._id,
+      type: "room",
+      active: { $ne: false },
+    }).lean();
+    selectedRoomName = selectedRoom?.name || "";
+  }
 
   if (!(resolvedBookingConfig.rooms || []).length) {
-    if (serviceItemId) {
-      const room = await ServiceItem.findOne({
-        _id: serviceItemId,
-        businessId: business._id,
-        type: "room",
-        active: { $ne: false },
-      }).lean();
-
-      if (room) {
-        resolvedBookingConfig.rooms = [{
-          id: String(room._id),
-          name: room.name,
-          description: room.description || "",
-          imageUrl: room.images?.[0] || "",
-          price: room.price,
-          currency: room.currency || "INR",
-        }];
-      }
-    } else {
+    if (includeSelectedRoomInFlow && selectedRoom) {
+      resolvedBookingConfig.rooms = [{
+        id: String(selectedRoom._id),
+        name: selectedRoom.name,
+        description: selectedRoom.description || "",
+        imageUrl: selectedRoom.images?.[0] || "",
+        price: selectedRoom.price,
+        currency: selectedRoom.currency || "INR",
+      }];
+    } else if (!serviceItemId) {
       const rooms = await ServiceItem.find({
         businessId: business._id,
         type: "room",
@@ -82,9 +123,16 @@ export async function handleSendBookingMetaFlow({ business, account, contact, co
       }));
       resolvedBookingConfig.roomSelection = rooms.length > 0;
     }
+  } else if (serviceItemId) {
+    const matchingRoom = (resolvedBookingConfig.rooms || []).find((room) => String(room.id) === String(serviceItemId));
+    selectedRoomName = matchingRoom?.name || "";
   }
 
-  const preparedBookingConfig = await prepareBookingFlowImages(resolvedBookingConfig);
+  const bookingCopy = getBookingFlowCopy(business, selectedRoomName);
+  const preparedBookingConfig = await prepareBookingFlowImages({
+    ...resolvedBookingConfig,
+    flowTitle: bookingCopy.buttonText,
+  });
   const flowJson = generateBookingFlowJson({ ...preparedBookingConfig, flowConfigId: "booking" });
   const flowDefinitionHash = hashFlowDefinition(flowJson);
   const shouldCreateFlow =
@@ -137,8 +185,9 @@ export async function handleSendBookingMetaFlow({ business, account, contact, co
     type: "flow",
     flowId,
     flowConfigId,
-    buttonText: "Book Appointment",
-    text: "Please tap the button below to complete your booking.",
+    buttonText: bookingCopy.buttonText,
+    text: messageText || bookingCopy.text,
+    mediaUrl,
     flowData: { serviceItemId: serviceItemId ? String(serviceItemId) : "" },
   };
 
@@ -191,7 +240,7 @@ function textLooksLikeRoomListRequest(text = "") {
   return /\b(view|show|list|available|see)\b/.test(normalized) && /\b(room|rooms|suite|suites)\b/.test(normalized);
 }
 
-async function sendRoomList({ business, account, contact, conversation, message = "Here are our available rooms. Tap Book to reserve." }) {
+async function sendRoomList({ business, account, contact, conversation, event, message = "Here are our available rooms. Tap Book to reserve." }) {
   const rooms = await ServiceItem.find({
     businessId: business._id,
     type: "room",
@@ -213,20 +262,22 @@ async function sendRoomList({ business, account, contact, conversation, message 
     senderType: "bot"
   });
 
-  // Send each room as a separate button message with an image and details
+  // Send each room as a direct Flow CTA so tapping the room card opens booking immediately.
   for (const room of rooms) {
     const priceStr = room.price !== null && room.price !== undefined ? `\nPrice: ${room.currency || "INR"} ${room.price}` : "";
     const bodyText = `*${room.name}*${priceStr}\n\n${room.description || ""}`.trim().slice(0, 1024);
-    
-    const response = {
-      type: "buttons",
-      text: bodyText,
-      mediaUrl: room.images && room.images.length > 0 ? room.images[0] : undefined,
-      options: [
-        { id: `book_room_${room._id}`, title: "Book" }
-      ]
-    };
-    await sendAndSaveMessage({ account, contact, conversation, response, senderType: "bot" });
+
+    await handleSendBookingMetaFlow({
+      business,
+      account,
+      contact,
+      conversation,
+      event,
+      serviceItemId: room._id,
+      includeSelectedRoomInFlow: false,
+      messageText: bodyText,
+      mediaUrl: room.images && room.images.length > 0 ? room.images[0] : "",
+    });
   }
 
   conversation.botState.updatedAt = new Date();
@@ -234,7 +285,7 @@ async function sendRoomList({ business, account, contact, conversation, message 
   return { response: { type: "text", text: "Sent room list" }, rooms };
 }
 
-async function sendRoomDetail({ room, account, contact, conversation }) {
+async function sendRoomDetail({ business, room, account, contact, conversation, event }) {
   const price = room.price !== null && room.price !== undefined ? `\nPrice: ${room.currency || "INR"} ${room.price}` : "";
   const details = `${room.name}\n${room.description || ""}${price}`.trim();
 
@@ -248,19 +299,15 @@ async function sendRoomDetail({ room, account, contact, conversation }) {
     senderType: "bot",
   });
 
-  await sendAndSaveMessage({
+  await handleSendBookingMetaFlow({
+    business,
     account,
     contact,
     conversation,
-    response: {
-      type: "buttons",
-      text: `Would you like to book ${room.name}?`,
-      options: [
-        { id: `book_room_${room._id}`, title: "Book now" },
-        { id: "room_list", title: "View rooms" },
-      ],
-    },
-    senderType: "bot",
+    event,
+    serviceItemId: room._id,
+    includeSelectedRoomInFlow: false,
+    messageText: `Would you like to book ${room.name}?`,
   });
   conversation.botState.variables.set("serviceItemId", String(room._id));
   conversation.botState.variables.set("roomType", room.name);
@@ -592,6 +639,7 @@ export async function processIncomingMessage(event) {
         account,
         contact,
         conversation,
+        event,
         message: "Here are the available room options. Tap a room to see details and book.",
       });
 
@@ -644,7 +692,7 @@ export async function processIncomingMessage(event) {
 
       if (service) {
         if (service.type === "room") {
-          await sendRoomDetail({ room: service, account, contact, conversation });
+          await sendRoomDetail({ business, room: service, account, contact, conversation, event });
           await writeDecision({
             businessId: business._id,
             conversationId: conversation._id,

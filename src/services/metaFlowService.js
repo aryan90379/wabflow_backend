@@ -225,7 +225,7 @@ export function generateBookingFlowJson(config) {
   // Main Booking Screen
   const mainScreen = {
     id: "BOOKING_FORM",
-    title: "Book Appointment",
+    title: String(config.flowTitle || "Book Appointment").slice(0, 30),
     terminal: true,
     data: {
       serviceItemId: {

@@ -283,7 +283,11 @@ export function buildWhatsappPayload(
       type: "interactive",
       interactive: {
         type: "flow",
-        header: configuredResponse.header ? { type: "text", text: String(configuredResponse.header).slice(0, 60) } : undefined,
+        header: configuredResponse.mediaUrl
+          ? { type: "image", image: { link: configuredResponse.mediaUrl } }
+          : configuredResponse.header
+            ? { type: "text", text: String(configuredResponse.header).slice(0, 60) }
+            : undefined,
         body: { text: String(configuredResponse.text || "Open form").slice(0, 1024) },
         footer: configuredResponse.footer ? { text: String(configuredResponse.footer).slice(0, 60) } : undefined,
         action: {
