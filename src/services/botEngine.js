@@ -31,6 +31,7 @@ import {
   updateFlowAssets,
   publishFlow,
   generateBookingFlowJson,
+  prepareBookingFlowImages,
 } from "./metaFlowService.js";
 
 function hashFlowDefinition(flowJson) {
@@ -65,7 +66,8 @@ export async function handleSendBookingMetaFlow({ business, account, contact, co
     }
   }
 
-  const flowJson = generateBookingFlowJson({ ...resolvedBookingConfig, flowConfigId: "booking" });
+  const preparedBookingConfig = await prepareBookingFlowImages(resolvedBookingConfig);
+  const flowJson = generateBookingFlowJson({ ...preparedBookingConfig, flowConfigId: "booking" });
   const flowDefinitionHash = hashFlowDefinition(flowJson);
   const shouldCreateFlow =
     !flowId ||

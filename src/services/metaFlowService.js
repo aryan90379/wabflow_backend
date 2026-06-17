@@ -10,6 +10,7 @@ import { encryptSecret } from "../utils/crypto.js";
 
 const GRAPH_VERSION = env.metaGraphVersion || "v21.0";
 const BASE_URL = `https://graph.facebook.com/${GRAPH_VERSION}`;
+const FLOW_IMAGE_MAX_BYTES = Number(process.env.META_FLOW_IMAGE_MAX_BYTES || 900000);
 
 function generateFlowKeyPair() {
   return crypto.generateKeyPairSync("rsa", {
@@ -126,6 +127,78 @@ function safeImageUrl(value = "") {
   return /^https?:\/\//i.test(url) ? url : "";
 }
 
+async function imageUrlToBase64(url) {
+  const safeUrl = safeImageUrl(url);
+  if (!safeUrl) return "";
+
+  try {
+    const response = await axios.get(safeUrl, {
+      responseType: "arraybuffer",
+      timeout: 10000,
+      maxContentLength: FLOW_IMAGE_MAX_BYTES,
+      maxBodyLength: FLOW_IMAGE_MAX_BYTES,
+      headers: {
+        Accept: "image/jpeg,image/png,image/webp,image/*",
+      },
+    });
+
+    const contentType = String(response.headers?.["content-type"] || "");
+    const buffer = Buffer.from(response.data);
+
+    if (!contentType.startsWith("image/")) {
+      console.warn("[meta-flow] Room image skipped because URL did not return an image", {
+        url: safeUrl,
+        contentType,
+      });
+      return "";
+    }
+
+    if (buffer.length > FLOW_IMAGE_MAX_BYTES) {
+      console.warn("[meta-flow] Room image skipped because it is too large", {
+        url: safeUrl,
+        bytes: buffer.length,
+        maxBytes: FLOW_IMAGE_MAX_BYTES,
+      });
+      return "";
+    }
+
+    return buffer.toString("base64");
+  } catch (error) {
+    console.warn("[meta-flow] Could not inline room image", {
+      url: safeUrl,
+      error: error.message,
+    });
+    return "";
+  }
+}
+
+export async function prepareBookingFlowImages(config = {}) {
+  const rooms = Array.isArray(config.rooms) ? config.rooms : [];
+
+  if (!rooms.length) {
+    return config;
+  }
+
+  const preparedRooms = await Promise.all(
+    rooms.map(async (room) => {
+      if (room.imageBase64 || !room.imageUrl) {
+        return room;
+      }
+
+      const imageBase64 = await imageUrlToBase64(room.imageUrl);
+      return {
+        ...room,
+        imageBase64,
+      };
+    })
+  );
+
+  return {
+    ...config,
+    rooms: preparedRooms,
+  };
+}
+
 function formatRoomDetail(room = {}) {
   const parts = [];
 
@@ -147,10 +220,10 @@ function buildRoomPreviewComponents(rooms = []) {
   const roomsWithImages = rooms
     .map((room) => ({
       ...room,
-      imageUrl: safeImageUrl(room.imageUrl),
+      imageBase64: String(room.imageBase64 || "").trim(),
       detail: formatRoomDetail(room),
     }))
-    .filter((room) => room.imageUrl)
+    .filter((room) => room.imageBase64)
     .slice(0, 3);
 
   if (!roomsWithImages.length) {
@@ -169,7 +242,7 @@ function buildRoomPreviewComponents(rooms = []) {
       },
       {
         type: "Image",
-        src: room.imageUrl,
+        src: room.imageBase64,
         height: 160,
         "scale-type": "cover",
       },
@@ -200,6 +273,7 @@ export function generateBookingFlowJson(config) {
       name: room.name,
       description: room.description || "",
       imageUrl: room.imageUrl || "",
+      imageBase64: room.imageBase64 || "",
       price: room.price ?? null,
       currency: room.currency || "INR",
     }));
