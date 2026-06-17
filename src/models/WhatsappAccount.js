@@ -24,6 +24,7 @@ const whatsappAccountSchema = new mongoose.Schema(
     lastWebhookAt: { type: Date, default: null },
     bookingFlowId: { type: String, default: null },
     bookingFlowConfigId: { type: String, default: null },
+    bookingFlowDefinitionHash: { type: String, default: "" },
     status: {
       type: String,
       enum: ["active", "disconnected", "error"],

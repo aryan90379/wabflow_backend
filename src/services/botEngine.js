@@ -1,6 +1,7 @@
 import {
   getWhatsappAccountWithToken,
 } from "./whatsappClient.js";
+import crypto from "crypto";
 import {
   WhatsappAccount,
   Business,
@@ -32,18 +33,30 @@ import {
   generateBookingFlowJson,
 } from "./metaFlowService.js";
 
+function hashFlowDefinition(flowJson) {
+  return crypto
+    .createHash("sha256")
+    .update(JSON.stringify(flowJson))
+    .digest("hex");
+}
+
 export async function handleSendBookingMetaFlow({ business, account, contact, conversation, serviceItemId, bookingConfig = {}, event }) {
   let flowId = account.bookingFlowId;
   let flowConfigId = account.bookingFlowConfigId;
+  const flowJson = generateBookingFlowJson({ ...bookingConfig, flowConfigId: "booking" });
+  const flowDefinitionHash = hashFlowDefinition(flowJson);
+  const shouldCreateFlow =
+    !flowId ||
+    !flowConfigId ||
+    account.bookingFlowDefinitionHash !== flowDefinitionHash;
 
-  if (!flowId || !flowConfigId) {
+  if (shouldCreateFlow) {
     try {
       const { account: tokenAccount, accessToken } = await getWhatsappAccountWithToken(account._id);
       await ensurePhoneNumberFlowPublicKey(tokenAccount, accessToken);
       const flowName = `Booking Flow ${Date.now()}`;
       const flowCreated = await createFlow(account.wabaId, accessToken, flowName);
       
-      const flowJson = generateBookingFlowJson({ ...bookingConfig, flowConfigId: "booking" });
       const assetResult = await updateFlowAssets(flowCreated.id, accessToken, flowJson);
       if (assetResult?.validation_errors?.length) {
         console.error("Meta Flow JSON validation errors:", assetResult.validation_errors);
@@ -53,9 +66,17 @@ export async function handleSendBookingMetaFlow({ business, account, contact, co
       flowId = flowCreated.id;
       flowConfigId = "booking";
       
-      await WhatsappAccount.updateOne({ _id: account._id }, { bookingFlowId: flowId, bookingFlowConfigId: flowConfigId });
+      await WhatsappAccount.updateOne(
+        { _id: account._id },
+        {
+          bookingFlowId: flowId,
+          bookingFlowConfigId: flowConfigId,
+          bookingFlowDefinitionHash: flowDefinitionHash,
+        }
+      );
       account.bookingFlowId = flowId;
       account.bookingFlowConfigId = flowConfigId;
+      account.bookingFlowDefinitionHash = flowDefinitionHash;
     } catch (e) {
       console.error("Meta Flow Auto Gen Error:", e.response?.data || e.message);
       // Fallback message if flow creation fails
