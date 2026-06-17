@@ -242,9 +242,9 @@ export function generateBookingFlowJson(config) {
           name: "booking_form",
           children: [
             ...(shouldSelectRoom ? [{
-              type: rooms.length <= 3 ? "RadioButtonsGroup" : "Dropdown",
+              type: "RadioButtonsGroup",
               name: "service_item_id",
-              label: "Select a room",
+              label: "Select the room you want to visit",
               required: true,
               "data-source": rooms.map((room) => ({
                 id: String(room.id),

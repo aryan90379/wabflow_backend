@@ -14,7 +14,7 @@ function parseMessage(message, value, entryId) {
         const responseJson = JSON.parse(reply.response_json || "{}");
         selectionId = "flow_submission";
         selectionTitle = "Flow Form Submitted";
-        text = `Submitted flow: ${reply.name || "Flow"}`;
+        text = "Booking form submitted";
         type = "flow_reply";
         media = { responseJson }; // Storing form fields in media for easy access
       } catch (e) {

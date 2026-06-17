@@ -703,7 +703,15 @@ export async function processIncomingMessage(event) {
       });
 
       if (room) {
-        const result = await handleSendBookingMetaFlow({ business, account, contact, conversation, serviceItemId: room._id, event });
+        const result = await handleSendBookingMetaFlow({
+          business,
+          account,
+          contact,
+          conversation,
+          serviceItemId: room._id,
+          event,
+          includeSelectedRoomInFlow: false,
+        });
 
         await writeDecision({
           businessId: business._id,

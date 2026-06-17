@@ -185,6 +185,10 @@ function sanitizeOptions(
     }));
 }
 
+function hasUrl(text = "") {
+  return /https?:\/\/\S+/i.test(String(text || ""));
+}
+
 export function buildWhatsappPayload(
   to,
   response
@@ -217,6 +221,7 @@ export function buildWhatsappPayload(
             configuredResponse.text ||
               "Choose an option"
           ),
+          preview_url: hasUrl(configuredResponse.text),
         },
       };
     }
@@ -337,6 +342,7 @@ export function buildWhatsappPayload(
             configuredResponse.text ||
               "No options are available."
           ),
+          preview_url: hasUrl(configuredResponse.text),
         },
       };
     }
@@ -437,6 +443,7 @@ export function buildWhatsappPayload(
       body: String(
         configuredResponse.text || ""
       ),
+      preview_url: hasUrl(configuredResponse.text),
     },
   };
 }
