@@ -24,7 +24,13 @@ import {
   sendAndSaveMessage,
 } from "./conversationService.js";
 import { continueActiveFlow, startFlow } from "./flowEngine.js";
-import { createFlow, updateFlowAssets, publishFlow, generateBookingFlowJson } from "./metaFlowService.js";
+import {
+  createFlow,
+  ensurePhoneNumberFlowPublicKey,
+  updateFlowAssets,
+  publishFlow,
+  generateBookingFlowJson,
+} from "./metaFlowService.js";
 
 export async function handleSendBookingMetaFlow({ business, account, contact, conversation, serviceItemId, bookingConfig = {}, event }) {
   let flowId = account.bookingFlowId;
@@ -32,7 +38,8 @@ export async function handleSendBookingMetaFlow({ business, account, contact, co
 
   if (!flowId || !flowConfigId) {
     try {
-      const { accessToken } = await getWhatsappAccountWithToken(account._id);
+      const { account: tokenAccount, accessToken } = await getWhatsappAccountWithToken(account._id);
+      await ensurePhoneNumberFlowPublicKey(tokenAccount, accessToken);
       const flowName = `Booking Flow ${Date.now()}`;
       const flowCreated = await createFlow(account.wabaId, accessToken, flowName);
       
@@ -656,8 +663,9 @@ export async function processIncomingMessage(event) {
     });
 
     if (activeFlowResult.handled) {
+      let actionTaken = activeFlowResult.action;
       if (activeFlowResult.action === "send_booking_meta_flow") {
-        await handleSendBookingMetaFlow({
+        const bookingMetaFlowResult = await handleSendBookingMetaFlow({
           business,
           account,
           contact,
@@ -666,6 +674,7 @@ export async function processIncomingMessage(event) {
           bookingConfig: activeFlowResult.bookingConfig || activeFlowResult.step?.config?.payload?.bookingConfig || {},
           event
         });
+        actionTaken = bookingMetaFlowResult.action || actionTaken;
       }
 
       await writeDecision({
@@ -674,7 +683,7 @@ export async function processIncomingMessage(event) {
         messageId: inboundMessage._id,
         intent,
         confidence,
-        actionTaken: activeFlowResult.action,
+        actionTaken,
         flowId: activeFlowResult.flow?._id,
       });
       return;

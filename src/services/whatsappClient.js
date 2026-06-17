@@ -63,7 +63,7 @@ export async function getWhatsappAccountWithToken(
       _id: accountId,
       status: "active",
     }).select(
-      "+encryptedValue +encryptionIv +encryptionTag"
+      "+encryptedValue +encryptionIv +encryptionTag +encryptedFlowPrivateKey +flowPrivateKeyIv +flowPrivateKeyTag"
     );
 
   if (!account) {

@@ -3,9 +3,75 @@ import FormData from "form-data";
 import fs from "fs";
 import path from "path";
 import os from "os";
+import crypto from "crypto";
+import { env } from "../config/env.js";
+import { WhatsappAccount } from "../models/WhatsappAccount.js";
+import { encryptSecret } from "../utils/crypto.js";
 
-const GRAPH_VERSION = "v18.0";
+const GRAPH_VERSION = env.metaGraphVersion || "v21.0";
 const BASE_URL = `https://graph.facebook.com/${GRAPH_VERSION}`;
+
+function generateFlowKeyPair() {
+  return crypto.generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    publicKeyEncoding: {
+      type: "spki",
+      format: "pem",
+    },
+    privateKeyEncoding: {
+      type: "pkcs8",
+      format: "pem",
+    },
+  });
+}
+
+export async function uploadPhoneNumberFlowPublicKey(phoneNumberId, accessToken, publicKey) {
+  const url = `${BASE_URL}/${phoneNumberId}/whatsapp_business_encryption`;
+  const response = await axios.post(
+    url,
+    new URLSearchParams({ business_public_key: publicKey }).toString(),
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+    }
+  );
+  return response.data;
+}
+
+export async function ensurePhoneNumberFlowPublicKey(account, accessToken) {
+  if (!account?.phoneNumberId) {
+    throw new Error("WhatsApp phone number ID is required to configure Flow encryption.");
+  }
+
+  if (account.flowPublicKeySetAt && account.encryptedFlowPrivateKey) {
+    return { created: false };
+  }
+
+  const { publicKey, privateKey } = generateFlowKeyPair();
+  await uploadPhoneNumberFlowPublicKey(account.phoneNumberId, accessToken, publicKey);
+
+  const encrypted = encryptSecret(privateKey);
+  await WhatsappAccount.updateOne(
+    { _id: account._id },
+    {
+      $set: {
+        encryptedFlowPrivateKey: encrypted.encryptedValue,
+        flowPrivateKeyIv: encrypted.encryptionIv,
+        flowPrivateKeyTag: encrypted.encryptionTag,
+        flowPublicKeySetAt: new Date(),
+      },
+    }
+  );
+
+  account.encryptedFlowPrivateKey = encrypted.encryptedValue;
+  account.flowPrivateKeyIv = encrypted.encryptionIv;
+  account.flowPrivateKeyTag = encrypted.encryptionTag;
+  account.flowPublicKeySetAt = new Date();
+
+  return { created: true };
+}
 
 /**
  * Generates the Flow JSON based on the booking configuration.
