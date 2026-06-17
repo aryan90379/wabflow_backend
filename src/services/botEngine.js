@@ -26,7 +26,7 @@ import {
 import { continueActiveFlow, startFlow } from "./flowEngine.js";
 import { createFlow, updateFlowAssets, publishFlow, generateBookingFlowJson } from "./metaFlowService.js";
 
-export async function handleSendBookingMetaFlow({ business, account, contact, conversation, serviceItemId, event }) {
+export async function handleSendBookingMetaFlow({ business, account, contact, conversation, serviceItemId, bookingConfig = {}, event }) {
   let flowId = account.bookingFlowId;
   let flowConfigId = account.bookingFlowConfigId;
 
@@ -36,7 +36,7 @@ export async function handleSendBookingMetaFlow({ business, account, contact, co
       const flowName = `Booking Flow ${Date.now()}`;
       const flowCreated = await createFlow(account.wabaId, accessToken, flowName);
       
-      const flowJson = generateBookingFlowJson({ flowConfigId: "booking" });
+      const flowJson = generateBookingFlowJson({ ...bookingConfig, flowConfigId: "booking" });
       await updateFlowAssets(flowCreated.id, accessToken, flowJson);
       await publishFlow(flowCreated.id, accessToken);
 
@@ -66,7 +66,7 @@ export async function handleSendBookingMetaFlow({ business, account, contact, co
     flowConfigId,
     buttonText: "Book Appointment",
     text: "Please tap the button below to complete your booking.",
-    flowData: serviceItemId ? { serviceItemId: String(serviceItemId) } : {},
+    flowData: { serviceItemId: serviceItemId ? String(serviceItemId) : "" },
   };
 
   await sendAndSaveMessage({ account, contact, conversation, response, senderType: "bot" });
@@ -663,6 +663,7 @@ export async function processIncomingMessage(event) {
           contact,
           conversation,
           serviceItemId: activeFlowResult.serviceItemId || activeFlowResult.step?.config?.payload?.serviceItemId,
+          bookingConfig: activeFlowResult.bookingConfig || activeFlowResult.step?.config?.payload?.bookingConfig || {},
           event
         });
       }

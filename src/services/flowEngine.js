@@ -91,6 +91,62 @@ function findSelectedOption(options = [], event = {}, labelKey = "title") {
   }) || null;
 }
 
+function isBookingPresetAction(action = {}) {
+  const targetStepId = String(action.targetStepId || "");
+  return (
+    action.preset === "preset_booking" ||
+    Boolean(action.bookingConfig) ||
+    targetStepId.startsWith("step_req_") ||
+    targetStepId.startsWith("step_requirement_") ||
+    targetStepId.startsWith("step_name_") ||
+    targetStepId.startsWith("step_phone_") ||
+    targetStepId.startsWith("step_date_") ||
+    targetStepId.startsWith("step_time_") ||
+    targetStepId.startsWith("step_notes_") ||
+    targetStepId.startsWith("step_booking_act_")
+  );
+}
+
+function isLegacyBookingQuestion(step = {}) {
+  const stepId = String(step.id || "");
+  const fieldKey = String(step.config?.fieldKey || "");
+  const saveTo = String(step.config?.saveTo || "");
+  const text = String(step.config?.text || "").toLowerCase();
+  return (
+    stepId.startsWith("step_req_") ||
+    stepId.startsWith("step_requirement_") ||
+    stepId.startsWith("step_name_") ||
+    stepId.startsWith("step_phone_") ||
+    stepId.startsWith("step_date_") ||
+    stepId.startsWith("step_time_") ||
+    stepId.startsWith("step_notes_") ||
+    (saveTo === "booking" && ["customerName", "customerPhone", "startDate", "startTime", "notes"].includes(fieldKey)) ||
+    (fieldKey === "requirement" && text.includes("booking"))
+  );
+}
+
+async function prepareBookingMetaFlowResponse({ conversation, flow, step = null }) {
+  const variables = mapToObject(conversation.botState.variables);
+  conversation.botState.currentNodeId = step?.id || conversation.botState.currentNodeId;
+  conversation.botState.awaitingInput = {
+    nodeId: step?.id || conversation.botState.currentNodeId || "booking_meta_flow",
+    fieldKey: "meta_flow_response",
+    saveTo: "booking",
+    validation: {},
+    nextNodeId: step?.config?.nextStepId || "",
+  };
+  conversation.botState.updatedAt = new Date();
+  await conversation.save();
+  return {
+    handled: true,
+    action: "send_booking_meta_flow",
+    flow,
+    step,
+    serviceItemId: variables.serviceItemId,
+    bookingConfig: variables._bookingConfig || {},
+  };
+}
+
 function validateAnswer(rawValue, validation = {}) {
   const value = String(rawValue ?? "").trim();
 
@@ -424,6 +480,12 @@ async function processOptionSelectionV2(flow, context) {
   context.conversation.botState.variables.set(`${selectedStep.id}_selectionId`, button.id);
   context.conversation.botState.variables.set(`${selectedStep.id}_selectionTitle`, button.label);
   context.conversation.botState.variables.set(`${selectedStep.id}_value`, button.value ?? button.label);
+  if (button.action?.bookingConfig) {
+    context.conversation.botState.variables.set("_bookingConfig", button.action.bookingConfig);
+  }
+  if (isBookingPresetAction(button.action)) {
+    context.conversation.botState.variables.set("_sendBookingMetaFlow", true);
+  }
   
   if (button.action?.targetStepId) {
     context.conversation.botState.currentNodeId = button.action.targetStepId || selectedStep.config?.nextStepId || null;
@@ -633,6 +695,13 @@ export async function continueFlow({ flow, business, account, contact, conversat
 export async function continueFlowV2({ flow, business, account, contact, conversation, event }) {
   const context = { flow, business, account, contact, conversation, event };
 
+  const awaitingStep = conversation.botState.awaitingInput
+    ? flow.steps?.find((item) => item.id === conversation.botState.awaitingInput.nodeId)
+    : null;
+  if (awaitingStep && isLegacyBookingQuestion(awaitingStep) && event?.type !== "flow_reply") {
+    return prepareBookingMetaFlowResponse({ conversation, flow, step: awaitingStep });
+  }
+
   const waitingHandled = await processWaitingInputV2(flow, context);
   if (waitingHandled) {
     conversation.botState.updatedAt = new Date();
@@ -641,6 +710,14 @@ export async function continueFlowV2({ flow, business, account, contact, convers
   }
 
   await processOptionSelectionV2(flow, context);
+  if (conversation.botState.variables.get("_sendBookingMetaFlow")) {
+    conversation.botState.variables.delete("_sendBookingMetaFlow");
+    return prepareBookingMetaFlowResponse({
+      conversation,
+      flow,
+      step: flow.steps?.find((item) => item.id === conversation.botState.currentNodeId) || null,
+    });
+  }
 
   for (let i = 0; i < MAX_NODE_STEPS; i += 1) {
     const currentNodeId = conversation.botState.currentNodeId;
@@ -776,6 +853,7 @@ export async function continueFlowV2({ flow, business, account, contact, convers
       }
 
       if (step.config?.actionType === "send_booking_form") {
+        const variables = mapToObject(conversation.botState.variables);
         conversation.botState.currentNodeId = step.id;
         conversation.botState.awaitingInput = {
           nodeId: step.id,
@@ -786,7 +864,7 @@ export async function continueFlowV2({ flow, business, account, contact, convers
         };
         conversation.botState.updatedAt = new Date();
         await conversation.save();
-        return { handled: true, action: "send_booking_meta_flow", flow, step };
+        return { handled: true, action: "send_booking_meta_flow", flow, step, bookingConfig: variables._bookingConfig || {} };
       }
 
       // similar to V1 action node

@@ -11,6 +11,23 @@ const BASE_URL = `https://graph.facebook.com/${GRAPH_VERSION}`;
  * Generates the Flow JSON based on the booking configuration.
  */
 export function generateBookingFlowJson(config) {
+  const collectFields = {
+    name: config.collectFields?.name !== false,
+    phone: config.collectFields?.phone !== false,
+    notes: Boolean(config.collectFields?.notes),
+  };
+
+  const completePayload = {
+    startDate: "${form.booking_date}",
+    startTime: "${form.booking_time}",
+    serviceItemId: "${data.serviceItemId}",
+    flowConfigId: config.flowConfigId || "booking",
+  };
+
+  if (collectFields.name) completePayload.customerName = "${form.customer_name}";
+  if (collectFields.phone) completePayload.customerPhone = "${form.customer_phone}";
+  if (collectFields.notes) completePayload.notes = "${form.booking_notes}";
+
   const screens = [];
 
   // Main Booking Screen
@@ -67,15 +84,7 @@ export function generateBookingFlowJson(config) {
               label: "Submit Request",
               on_click_action: {
                 name: "complete",
-                payload: {
-                  customerName: "${form.customer_name}",
-                  customerPhone: "${form.customer_phone}",
-                  startDate: "${form.booking_date}",
-                  startTime: "${form.booking_time}",
-                  notes: "${form.booking_notes}",
-                  serviceItemId: "${data.serviceItemId}",
-                  flowConfigId: config.flowConfigId || "booking"
-                }
+                payload: completePayload
               }
             }
           ]
