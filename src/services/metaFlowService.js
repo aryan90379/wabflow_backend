@@ -73,6 +73,54 @@ export async function ensurePhoneNumberFlowPublicKey(account, accessToken) {
   return { created: true };
 }
 
+function toMinutes(value) {
+  const [hour, minute] = String(value || "").split(":").map((part) => Number(part));
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
+  return hour * 60 + minute;
+}
+
+function formatTimeLabel(value) {
+  const minutes = toMinutes(value);
+  if (minutes === null) return String(value || "").trim();
+
+  const hour24 = Math.floor(minutes / 60);
+  const minute = minutes % 60;
+  const suffix = hour24 >= 12 ? "PM" : "AM";
+  const hour12 = hour24 % 12 || 12;
+  return `${hour12}:${String(minute).padStart(2, "0")} ${suffix}`;
+}
+
+function buildTimeSlotOptions(availability = {}) {
+  const configuredSlots = (availability.slots || [])
+    .map((slot) => String(slot || "").trim())
+    .filter(Boolean);
+
+  const slots = configuredSlots.length
+    ? configuredSlots
+    : availability.mode === "range"
+      ? buildHourlyRangeSlots(availability.from, availability.to)
+      : [];
+
+  return slots.slice(0, 10).map((slot) => ({
+    id: slot.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 80),
+    title: formatTimeLabel(slot).slice(0, 30),
+  }));
+}
+
+function buildHourlyRangeSlots(from = "09:00", to = "18:00") {
+  const start = toMinutes(from);
+  const end = toMinutes(to);
+  if (start === null || end === null || end <= start) return [];
+
+  const slots = [];
+  for (let minutes = start; minutes < end && slots.length < 10; minutes += 60) {
+    const hour = Math.floor(minutes / 60);
+    const minute = minutes % 60;
+    slots.push(`${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`);
+  }
+  return slots;
+}
+
 /**
  * Generates the Flow JSON based on the booking configuration.
  */
@@ -82,11 +130,16 @@ export function generateBookingFlowJson(config) {
     phone: config.collectFields?.phone !== false,
     notes: Boolean(config.collectFields?.notes),
   };
+  const rooms = (config.rooms || [])
+    .filter((room) => room.id && room.name)
+    .slice(0, 10);
+  const shouldSelectRoom = Boolean(config.roomSelection && rooms.length);
+  const timeSlots = buildTimeSlotOptions(config.availability || {});
 
   const completePayload = {
     startDate: "${form.booking_date}",
-    startTime: "${form.booking_time}",
-    serviceItemId: "${data.serviceItemId}",
+    startTime: timeSlots.length ? "${form.booking_time_slot}" : "${form.booking_time}",
+    serviceItemId: shouldSelectRoom ? "${form.service_item_id}" : "${data.serviceItemId}",
     flowConfigId: config.flowConfigId || "booking",
   };
 
@@ -114,6 +167,16 @@ export function generateBookingFlowJson(config) {
           type: "Form",
           name: "booking_form",
           children: [
+            ...(shouldSelectRoom ? [{
+              type: rooms.length <= 3 ? "RadioButtonsGroup" : "Dropdown",
+              name: "service_item_id",
+              label: "Select a room",
+              required: true,
+              "data-source": rooms.map((room) => ({
+                id: String(room.id),
+                title: String(room.name).slice(0, 30),
+              })),
+            }] : []),
             ...(config.collectFields?.name !== false ? [{
               type: "TextInput",
               name: "customer_name",
@@ -128,19 +191,25 @@ export function generateBookingFlowJson(config) {
               required: true,
             }] : []),
             {
-              type: "TextInput",
+              type: "DatePicker",
               name: "booking_date",
-              label: "Preferred Date (DD-MM-YYYY)",
+              label: "Preferred Date",
               required: true,
             },
-            {
+            ...(timeSlots.length ? [{
+              type: timeSlots.length <= 3 ? "RadioButtonsGroup" : "Dropdown",
+              name: "booking_time_slot",
+              label: "Preferred Time",
+              required: true,
+              "data-source": timeSlots,
+            }] : [{
               type: "TextInput",
               name: "booking_time",
               label: "Preferred Time (HH:MM AM/PM)",
               required: true,
-            },
+            }]),
             ...(config.collectFields?.notes ? [{
-              type: "TextInput",
+              type: "TextArea",
               name: "booking_notes",
               label: "Any Notes?",
               required: false,
