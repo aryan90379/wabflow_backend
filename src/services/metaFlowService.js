@@ -163,7 +163,6 @@ export function generateBookingFlowJson(config) {
 
   return {
     version: "3.1",
-    data_api_version: "3.0",
     routing_model: {
       BOOKING_FORM: []
     },
