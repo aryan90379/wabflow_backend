@@ -229,11 +229,6 @@ async function sendRoomList({ business, account, contact, conversation, message 
     await sendAndSaveMessage({ account, contact, conversation, response, senderType: "bot" });
   }
 
-  conversation.botState.active = false;
-  conversation.botState.flowId = null;
-  conversation.botState.flowVersion = null;
-  conversation.botState.currentNodeId = null;
-  conversation.botState.awaitingInput = null;
   conversation.botState.updatedAt = new Date();
   await conversation.save();
   return { response: { type: "text", text: "Sent room list" }, rooms };
@@ -267,13 +262,8 @@ async function sendRoomDetail({ room, account, contact, conversation }) {
     },
     senderType: "bot",
   });
-
-  conversation.botState.active = false;
-  conversation.botState.flowId = null;
-  conversation.botState.flowVersion = null;
-  conversation.botState.currentNodeId = null;
-  conversation.botState.awaitingInput = null;
-  conversation.botState.variables = new Map([["serviceItemId", String(room._id)], ["roomType", room.name]]);
+  conversation.botState.variables.set("serviceItemId", String(room._id));
+  conversation.botState.variables.set("roomType", room.name);
   conversation.botState.updatedAt = new Date();
   await conversation.save();
 }
@@ -679,11 +669,6 @@ export async function processIncomingMessage(event) {
             : { type: "text", text: reply },
           senderType: "bot",
         });
-        conversation.botState.active = false;
-        conversation.botState.flowId = null;
-        conversation.botState.flowVersion = null;
-        conversation.botState.currentNodeId = null;
-        conversation.botState.awaitingInput = null;
         conversation.botState.updatedAt = new Date();
         await conversation.save();
         await writeDecision({

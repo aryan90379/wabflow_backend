@@ -179,8 +179,9 @@ async function imageUrlToBase64(url) {
       };
     }
 
+    const mimeType = contentType || "image/jpeg";
     return {
-      imageBase64: buffer.toString("base64"),
+      imageBase64: `data:${mimeType};base64,${buffer.toString("base64")}`,
       imageBytes: buffer.length,
       status: "inlined",
       reason: "",
@@ -213,8 +214,9 @@ export async function prepareBookingFlowImages(config = {}) {
       }
 
       let optimizedUrl = room.imageUrl;
-      if (!optimizedUrl.includes("wsrv.nl")) {
-        optimizedUrl = `https://wsrv.nl/?url=${encodeURIComponent(optimizedUrl)}&w=500&q=80&output=jpg`;
+      // The React Native app already compresses images to ~50KB using quality:0.45 before uploading to Bunny CDN
+      if (optimizedUrl.includes("wabflow.b-cdn.net") && !optimizedUrl.includes("?")) {
+        optimizedUrl += "?width=400";
       }
 
       const imageResult = await imageUrlToBase64(optimizedUrl);
@@ -246,11 +248,18 @@ export async function prepareBookingFlowImages(config = {}) {
   };
 }
 
+function formatPrice(price, currency = "INR") {
+  if (price === null || price === undefined || price === "") return "";
+  const priceStr = String(price).trim();
+  if (/[a-zA-Z$₹€£¥]/.test(priceStr)) return priceStr;
+  return `${currency} ${priceStr}`;
+}
+
 function formatRoomDetail(room = {}) {
   const parts = [];
 
   if (room.price !== null && room.price !== undefined && room.price !== "") {
-    parts.push(`${room.currency || "INR"} ${room.price}`);
+    parts.push(formatPrice(room.price, room.currency));
   }
 
   if (room.description) {
@@ -367,7 +376,7 @@ export function generateBookingFlowJson(config) {
               required: true,
               "data-source": rooms.map((room) => ({
                 id: String(room.id),
-                title: room.price ? `${String(room.name).slice(0, 20)} (${room.currency || "INR"} ${room.price})` : String(room.name).slice(0, 30),
+                title: room.price ? `${String(room.name).slice(0, 20)} (${formatPrice(room.price, room.currency)})` : String(room.name).slice(0, 30),
               })),
             }] : []),
             ...(config.collectFields?.name !== false ? [{
