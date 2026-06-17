@@ -124,7 +124,7 @@ export function generateBookingFlowJson(config) {
               type: "TextInput",
               name: "customer_phone",
               label: "Phone Number",
-              input_type: "phone",
+              "input-type": "phone",
               required: true,
             }] : []),
             {
@@ -148,7 +148,7 @@ export function generateBookingFlowJson(config) {
             {
               type: "Footer",
               label: "Submit Request",
-              on_click_action: {
+              "on-click-action": {
                 name: "complete",
                 payload: completePayload
               }

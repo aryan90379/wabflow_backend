@@ -44,7 +44,10 @@ export async function handleSendBookingMetaFlow({ business, account, contact, co
       const flowCreated = await createFlow(account.wabaId, accessToken, flowName);
       
       const flowJson = generateBookingFlowJson({ ...bookingConfig, flowConfigId: "booking" });
-      await updateFlowAssets(flowCreated.id, accessToken, flowJson);
+      const assetResult = await updateFlowAssets(flowCreated.id, accessToken, flowJson);
+      if (assetResult?.validation_errors?.length) {
+        console.error("Meta Flow JSON validation errors:", assetResult.validation_errors);
+      }
       await publishFlow(flowCreated.id, accessToken);
 
       flowId = flowCreated.id;
