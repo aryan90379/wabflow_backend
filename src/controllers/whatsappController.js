@@ -143,6 +143,91 @@ const graphPost = async (
   );
 };
 
+function imageContentTypeFromUrl(url = "") {
+  const lower = String(url || "").toLowerCase();
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".webp")) return "image/webp";
+  return "image/jpeg";
+}
+
+async function createMetaUploadSession({
+  accessToken,
+  fileLength,
+  fileType,
+}) {
+  if (!env.metaAppId) {
+    throw new Error("META_APP_ID is required to upload WhatsApp profile pictures.");
+  }
+
+  return readJson(
+    await fetch(
+      buildUrl(`/${env.metaAppId}/uploads`, {
+        file_length: fileLength,
+        file_type: fileType,
+        access_token: accessToken,
+      }),
+      { method: "POST" }
+    ),
+    "Create Meta upload session"
+  );
+}
+
+async function uploadMetaFileBytes({
+  accessToken,
+  uploadSessionId,
+  buffer,
+}) {
+  const result = await readJson(
+    await fetch(
+      buildUrl(`/${uploadSessionId}`),
+      {
+        method: "POST",
+        headers: {
+          Authorization: `OAuth ${accessToken}`,
+          file_offset: "0",
+          "Content-Type": "application/octet-stream",
+        },
+        body: buffer,
+      }
+    ),
+    "Upload Meta file bytes"
+  );
+
+  if (!result.h) {
+    throw new Error("Meta upload did not return a profile picture handle.");
+  }
+
+  return result.h;
+}
+
+async function uploadWhatsappProfilePictureHandle(profilePictureUrl, accessToken) {
+  const imageResponse = await fetch(profilePictureUrl);
+  if (!imageResponse.ok) {
+    throw new Error(`Could not fetch profile picture URL. Status ${imageResponse.status}`);
+  }
+
+  const contentType =
+    imageResponse.headers.get("content-type")?.split(";")[0]?.trim() ||
+    imageContentTypeFromUrl(profilePictureUrl);
+
+  if (!/^image\/(jpeg|jpg|png|webp)$/i.test(contentType)) {
+    throw new Error(`WhatsApp profile picture must be a JPEG, PNG, or WebP image. Got ${contentType}.`);
+  }
+
+  const buffer = Buffer.from(await imageResponse.arrayBuffer());
+  const uploadSession = await createMetaUploadSession({
+    accessToken,
+    fileLength: buffer.length,
+    fileType: contentType.replace("image/jpg", "image/jpeg"),
+  });
+
+  return uploadMetaFileBytes({
+    accessToken,
+    uploadSessionId: uploadSession.id,
+    buffer,
+  });
+}
+
 function scopeTargets(
   debugData,
   scopeName
@@ -957,18 +1042,12 @@ export async function updateWhatsappBusinessProfile(
     )
       .trim();
 
-  const metaPayload = {
+  const baseMetaPayload = {
     messaging_product:
       "whatsapp",
     ...(about ? { about } : {}),
     ...(description
       ? { description }
-      : {}),
-    ...(profilePictureUrl
-      ? {
-          profile_picture_url:
-            profilePictureUrl,
-        }
       : {}),
   };
 
@@ -984,6 +1063,21 @@ export async function updateWhatsappBusinessProfile(
         await getWhatsappAccountWithToken(
           account._id
         );
+
+      const metaPayload = {
+        ...baseMetaPayload,
+      };
+
+      let profilePictureHandle = "";
+      if (profilePictureUrl) {
+        profilePictureHandle =
+          await uploadWhatsappProfilePictureHandle(
+            profilePictureUrl,
+            accessToken
+          );
+        metaPayload.profile_picture_handle =
+          profilePictureHandle;
+      }
 
       await graphPost(
         `/${account.phoneNumberId}/whatsapp_business_profile`,
@@ -1005,6 +1099,7 @@ export async function updateWhatsappBusinessProfile(
       console.log("[wa-profile] Meta profile after update", {
         accountId: String(account._id),
         requestedProfilePictureUrl: profilePictureUrl || "",
+        profilePictureHandle: safe(profilePictureHandle),
         metaProfilePictureUrl:
           refreshedProfile?.data?.[0]
             ?.profile_picture_url ||
