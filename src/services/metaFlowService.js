@@ -10,7 +10,7 @@ import { encryptSecret } from "../utils/crypto.js";
 
 const GRAPH_VERSION = env.metaGraphVersion || "v21.0";
 const BASE_URL = `https://graph.facebook.com/${GRAPH_VERSION}`;
-const FLOW_IMAGE_MAX_BYTES = Number(process.env.META_FLOW_IMAGE_MAX_BYTES || 900000);
+const FLOW_IMAGE_MAX_BYTES = Number(process.env.META_FLOW_IMAGE_MAX_BYTES || 300000);
 
 function generateFlowKeyPair() {
   return crypto.generateKeyPairSync("rsa", {
@@ -129,7 +129,14 @@ function safeImageUrl(value = "") {
 
 async function imageUrlToBase64(url) {
   const safeUrl = safeImageUrl(url);
-  if (!safeUrl) return "";
+  if (!safeUrl) {
+    return {
+      imageBase64: "",
+      imageBytes: 0,
+      status: "skipped",
+      reason: "invalid_url",
+    };
+  }
 
   try {
     const response = await axios.get(safeUrl, {
@@ -150,7 +157,12 @@ async function imageUrlToBase64(url) {
         url: safeUrl,
         contentType,
       });
-      return "";
+      return {
+        imageBase64: "",
+        imageBytes: buffer.length,
+        status: "skipped",
+        reason: "not_image",
+      };
     }
 
     if (buffer.length > FLOW_IMAGE_MAX_BYTES) {
@@ -159,16 +171,31 @@ async function imageUrlToBase64(url) {
         bytes: buffer.length,
         maxBytes: FLOW_IMAGE_MAX_BYTES,
       });
-      return "";
+      return {
+        imageBase64: "",
+        imageBytes: buffer.length,
+        status: "skipped",
+        reason: "too_large",
+      };
     }
 
-    return buffer.toString("base64");
+    return {
+      imageBase64: buffer.toString("base64"),
+      imageBytes: buffer.length,
+      status: "inlined",
+      reason: "",
+    };
   } catch (error) {
     console.warn("[meta-flow] Could not inline room image", {
       url: safeUrl,
       error: error.message,
     });
-    return "";
+    return {
+      imageBase64: "",
+      imageBytes: 0,
+      status: "skipped",
+      reason: error.message,
+    };
   }
 }
 
@@ -185,13 +212,28 @@ export async function prepareBookingFlowImages(config = {}) {
         return room;
       }
 
-      const imageBase64 = await imageUrlToBase64(room.imageUrl);
+      const imageResult = await imageUrlToBase64(room.imageUrl);
       return {
         ...room,
-        imageBase64,
+        imageBase64: imageResult.imageBase64,
+        imageBytes: imageResult.imageBytes,
+        imageStatus: imageResult.status,
+        imageStatusReason: imageResult.reason,
       };
     })
   );
+
+  console.log("[meta-flow] Prepared booking room images", {
+    rooms: preparedRooms.map((room) => ({
+      id: String(room.id || ""),
+      name: String(room.name || "").slice(0, 80),
+      hasImageUrl: Boolean(room.imageUrl),
+      hasImageBase64: Boolean(room.imageBase64),
+      imageBytes: room.imageBytes || 0,
+      imageStatus: room.imageStatus || (room.imageBase64 ? "inlined" : "none"),
+      reason: room.imageStatusReason || "",
+    })),
+  });
 
   return {
     ...config,
