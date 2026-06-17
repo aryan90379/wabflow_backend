@@ -7,6 +7,8 @@ import {
   appleAuth,
   checkEmail,
   getMe,
+  linkAppleAuth,
+  linkGoogleAuth,
   updateMe,
   googleAuth,
   staffLogin,
@@ -99,6 +101,8 @@ apiRouter.get("/health", (req, res) => {
 apiRouter.post("/auth/google", asyncHandler(googleAuth));
 apiRouter.post("/auth/apple", asyncHandler(appleAuth));
 apiRouter.post("/auth/check-email", asyncHandler(checkEmail));
+apiRouter.post("/auth/link/google", authMiddleware, asyncHandler(linkGoogleAuth));
+apiRouter.post("/auth/link/apple", authMiddleware, asyncHandler(linkAppleAuth));
 apiRouter.post("/auth/staff/login", asyncHandler(staffLogin));
 apiRouter.post("/auth/staff/logout", authMiddleware, asyncHandler(staffLogout));
 apiRouter.get("/auth/me", authMiddleware, asyncHandler(getMe));

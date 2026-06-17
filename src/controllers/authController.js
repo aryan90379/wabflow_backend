@@ -26,6 +26,10 @@ function createAppToken(user) {
   );
 }
 
+function publicUser(user) {
+  return user?.toObject ? user.toObject() : user;
+}
+
 function createStaffToken(member, sessionId) {
   return jwt.sign(
     {
@@ -129,6 +133,81 @@ export async function googleAuth(req, res) {
   }
 }
 
+export async function linkGoogleAuth(req, res) {
+  try {
+    if (req.authType === "staff") {
+      return res.status(403).json({ success: false, error: "Staff accounts cannot link owner login providers." });
+    }
+
+    const { idToken } = req.body;
+
+    if (!idToken) {
+      return res.status(400).json({
+        success: false,
+        error: "idToken is required.",
+      });
+    }
+
+    if (!env.googleClientIds.length) {
+      return res.status(500).json({
+        success: false,
+        error: "Google client ID is not configured.",
+      });
+    }
+
+    const ticket = await googleClient.verifyIdToken({
+      idToken,
+      audience: env.googleClientIds,
+    });
+
+    const payload = ticket.getPayload();
+    const googleId = payload?.sub;
+    const email = String(payload?.email || "").toLowerCase();
+
+    if (!payload?.email_verified || !email || !googleId) {
+      return res.status(400).json({
+        success: false,
+        error: "Verified Google email is required.",
+      });
+    }
+
+    const user = await User.findById(req.userId);
+    if (!user) {
+      return res.status(404).json({ success: false, error: "User not found." });
+    }
+
+    const linkedUser = await User.findOne({ googleId });
+    if (linkedUser && String(linkedUser._id) !== String(user._id)) {
+      return res.status(409).json({
+        success: false,
+        error: "This Google account is already linked to another WabFlow user.",
+      });
+    }
+
+    user.googleId = googleId;
+    user.email = user.email || email;
+    user.name = user.name || payload.name || "";
+    user.profilepic = user.profilepic || payload.picture || "";
+    await user.save();
+
+    return res.json({
+      success: true,
+      token: createAppToken(user),
+      user: publicUser(user),
+    });
+  } catch (error) {
+    console.error("❌ Link Google auth error:", {
+      message: error.message,
+      name: error.name,
+    });
+
+    return res.status(500).json({
+      success: false,
+      error: "Google account linking failed.",
+    });
+  }
+}
+
 export async function appleAuth(req, res) {
   try {
     const { identityToken, email, firstName, lastName, fullName } = req.body;
@@ -219,6 +298,83 @@ export async function appleAuth(req, res) {
     return res.status(401).json({
       success: false,
       error: "Apple authentication failed.",
+    });
+  }
+}
+
+export async function linkAppleAuth(req, res) {
+  try {
+    if (req.authType === "staff") {
+      return res.status(403).json({ success: false, error: "Staff accounts cannot link owner login providers." });
+    }
+
+    const { identityToken, email, firstName, lastName, fullName } = req.body;
+
+    if (!identityToken) {
+      return res.status(400).json({
+        success: false,
+        error: "identityToken is required.",
+      });
+    }
+
+    if (!env.appleClientId) {
+      return res.status(500).json({
+        success: false,
+        error: "APPLE_CLIENT_ID is not configured.",
+      });
+    }
+
+    const claims = await appleSignin.verifyIdToken(identityToken, {
+      audience: env.appleClientId,
+      ignoreExpiration: false,
+    });
+
+    const appleId = claims?.sub;
+
+    if (!appleId) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid Apple token.",
+      });
+    }
+
+    const user = await User.findById(req.userId);
+    if (!user) {
+      return res.status(404).json({ success: false, error: "User not found." });
+    }
+
+    const linkedUser = await User.findOne({ appleId });
+    if (linkedUser && String(linkedUser._id) !== String(user._id)) {
+      return res.status(409).json({
+        success: false,
+        error: "This Apple ID is already linked to another WabFlow user.",
+      });
+    }
+
+    const finalEmail = String(claims.email || email || "").trim().toLowerCase();
+    const suppliedName =
+      cleanName(firstName, lastName) ||
+      cleanName(fullName?.givenName, fullName?.familyName);
+
+    user.appleId = appleId;
+    user.email = user.email || finalEmail || makeFallbackAppleEmail(appleId);
+    if (suppliedName && !user.name) user.name = suppliedName;
+    await user.save();
+
+    return res.json({
+      success: true,
+      token: createAppToken(user),
+      user: publicUser(user),
+    });
+  } catch (error) {
+    console.error("❌ Link Apple auth error:", {
+      message: error.message,
+      name: error.name,
+    });
+
+    return res.status(401).json({
+      success: false,
+      error: "Apple account linking failed.",
     });
   }
 }
