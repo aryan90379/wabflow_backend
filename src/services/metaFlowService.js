@@ -122,130 +122,10 @@ function buildHourlyRangeSlots(from = "09:00", to = "18:00") {
   return slots;
 }
 
-function safeImageUrl(value = "") {
-  const url = String(value || "").trim();
-  return /^https?:\/\//i.test(url) ? url : "";
-}
-
-async function imageUrlToBase64(url) {
-  const safeUrl = safeImageUrl(url);
-  if (!safeUrl) {
-    return {
-      imageBase64: "",
-      imageBytes: 0,
-      status: "skipped",
-      reason: "invalid_url",
-    };
-  }
-
-  try {
-    const response = await axios.get(safeUrl, {
-      responseType: "arraybuffer",
-      timeout: 10000,
-      maxContentLength: FLOW_IMAGE_MAX_BYTES,
-      maxBodyLength: FLOW_IMAGE_MAX_BYTES,
-      headers: {
-        Accept: "image/jpeg,image/png,image/webp,image/*",
-      },
-    });
-
-    const contentType = String(response.headers?.["content-type"] || "");
-    const buffer = Buffer.from(response.data);
-
-    if (!contentType.startsWith("image/")) {
-      console.warn("[meta-flow] Room image skipped because URL did not return an image", {
-        url: safeUrl,
-        contentType,
-      });
-      return {
-        imageBase64: "",
-        imageBytes: buffer.length,
-        status: "skipped",
-        reason: "not_image",
-      };
-    }
-
-    if (buffer.length > FLOW_IMAGE_MAX_BYTES) {
-      console.warn("[meta-flow] Room image skipped because it is too large", {
-        url: safeUrl,
-        bytes: buffer.length,
-        maxBytes: FLOW_IMAGE_MAX_BYTES,
-      });
-      return {
-        imageBase64: "",
-        imageBytes: buffer.length,
-        status: "skipped",
-        reason: "too_large",
-      };
-    }
-
-    const mimeType = contentType || "image/jpeg";
-    return {
-      imageBase64: `data:${mimeType};base64,${buffer.toString("base64")}`,
-      imageBytes: buffer.length,
-      status: "inlined",
-      reason: "",
-    };
-  } catch (error) {
-    console.warn("[meta-flow] Could not inline room image", {
-      url: safeUrl,
-      error: error.message,
-    });
-    return {
-      imageBase64: "",
-      imageBytes: 0,
-      status: "skipped",
-      reason: error.message,
-    };
-  }
-}
 
 export async function prepareBookingFlowImages(config = {}) {
-  const rooms = Array.isArray(config.rooms) ? config.rooms : [];
-
-  if (!rooms.length) {
-    return config;
-  }
-
-  const preparedRooms = await Promise.all(
-    rooms.map(async (room) => {
-      if (room.imageBase64 || !room.imageUrl) {
-        return room;
-      }
-
-      let optimizedUrl = room.imageUrl;
-      // The React Native app already compresses images to ~50KB using quality:0.45 before uploading to Bunny CDN
-      if (optimizedUrl.includes("wabflow.b-cdn.net") && !optimizedUrl.includes("?")) {
-        optimizedUrl += "?width=400";
-      }
-
-      const imageResult = await imageUrlToBase64(optimizedUrl);
-      return {
-        ...room,
-        imageBase64: imageResult.imageBase64,
-        imageBytes: imageResult.imageBytes,
-        imageStatus: imageResult.status,
-        imageStatusReason: imageResult.reason,
-      };
-    })
-  );
-
-  console.log("[meta-flow] Prepared booking room images", {
-    rooms: preparedRooms.map((room) => ({
-      id: String(room.id || ""),
-      name: String(room.name || "").slice(0, 80),
-      hasImageUrl: Boolean(room.imageUrl),
-      hasImageBase64: Boolean(room.imageBase64),
-      imageBytes: room.imageBytes || 0,
-      imageStatus: room.imageStatus || (room.imageBase64 ? "inlined" : "none"),
-      reason: room.imageStatusReason || "",
-    })),
-  });
-
-  return {
-    ...config,
-    rooms: preparedRooms,
-  };
+  // We no longer fetch or inline images in the flow to avoid WhatsApp payload size limits and rendering errors
+  return config;
 }
 
 function formatPrice(price, currency = "INR") {
@@ -295,14 +175,6 @@ function buildRoomPreviewComponents(rooms = []) {
         type: "TextBody",
         text: String(room.name).slice(0, 80),
       },
-      ...(room.imageBase64 
-        ? [{
-            type: "Image",
-            src: room.imageBase64,
-            height: 160,
-            "scale-type": "cover",
-          }]
-        : []),
       ...(room.detail
         ? [{
             type: "TextCaption",
