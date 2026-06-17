@@ -162,7 +162,7 @@ export function generateBookingFlowJson(config) {
   screens.push(mainScreen);
 
   return {
-    version: "3.1",
+    version: config.version || env.metaFlowJsonVersion,
     routing_model: {
       BOOKING_FORM: []
     },

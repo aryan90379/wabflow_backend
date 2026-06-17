@@ -21,6 +21,7 @@ export const env = {
   metaAppId: process.env.META_APP_ID || "",
   metaAppSecret: process.env.META_APP_SECRET || "",
   metaGraphVersion: process.env.META_GRAPH_VERSION || "v25.0",
+  metaFlowJsonVersion: process.env.META_FLOW_JSON_VERSION || "7.2",
   metaVerifyToken: process.env.META_VERIFY_TOKEN || "",
   whatsappPin: process.env.WHATSAPP_2FA_PIN || "123456",
   tokenEncryptionKey: process.env.TOKEN_ENCRYPTION_KEY || "",
