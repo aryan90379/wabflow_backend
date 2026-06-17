@@ -18,7 +18,12 @@ export function generateBookingFlowJson(config) {
     id: "BOOKING_FORM",
     title: "Book Appointment",
     terminal: true,
-    data: {},
+    data: {
+      serviceItemId: {
+        type: "string",
+        __example__: "12345"
+      }
+    },
     layout: {
       type: "SingleColumnLayout",
       children: [
@@ -68,6 +73,7 @@ export function generateBookingFlowJson(config) {
                   startDate: "${form.booking_date}",
                   startTime: "${form.booking_time}",
                   notes: "${form.booking_notes}",
+                  serviceItemId: "${data.serviceItemId}",
                   flowConfigId: config.flowConfigId || "booking"
                 }
               }

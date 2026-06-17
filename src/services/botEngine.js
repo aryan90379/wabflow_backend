@@ -1,4 +1,7 @@
 import {
+  getWhatsappAccountWithToken,
+} from "./whatsappClient.js";
+import {
   WhatsappAccount,
   Business,
   Message,
@@ -21,6 +24,55 @@ import {
   sendAndSaveMessage,
 } from "./conversationService.js";
 import { continueActiveFlow, startFlow } from "./flowEngine.js";
+import { createFlow, updateFlowAssets, publishFlow, generateBookingFlowJson } from "./metaFlowService.js";
+
+export async function handleSendBookingMetaFlow({ business, account, contact, conversation, serviceItemId, event }) {
+  let flowId = account.bookingFlowId;
+  let flowConfigId = account.bookingFlowConfigId;
+
+  if (!flowId || !flowConfigId) {
+    try {
+      const { accessToken } = await getWhatsappAccountWithToken(account._id);
+      const flowName = `Booking Flow ${Date.now()}`;
+      const flowCreated = await createFlow(account.wabaId, accessToken, flowName);
+      
+      const flowJson = generateBookingFlowJson({ flowConfigId: "booking" });
+      await updateFlowAssets(flowCreated.id, accessToken, flowJson);
+      await publishFlow(flowCreated.id, accessToken);
+
+      flowId = flowCreated.id;
+      flowConfigId = "booking";
+      
+      await WhatsappAccount.updateOne({ _id: account._id }, { bookingFlowId: flowId, bookingFlowConfigId: flowConfigId });
+      account.bookingFlowId = flowId;
+      account.bookingFlowConfigId = flowConfigId;
+    } catch (e) {
+      console.error("Meta Flow Auto Gen Error:", e.response?.data || e.message);
+      // Fallback message if flow creation fails
+      await sendAndSaveMessage({
+        account,
+        contact,
+        conversation,
+        response: { type: "text", text: "Please tell us what you need, and we will get back to you shortly." },
+        senderType: "bot",
+      });
+      return { handled: true, action: "sent_fallback" };
+    }
+  }
+
+  const response = {
+    type: "flow",
+    flowId,
+    flowConfigId,
+    buttonText: "Book Appointment",
+    text: "Please tap the button below to complete your booking.",
+    flowData: serviceItemId ? { serviceItemId: String(serviceItemId) } : {},
+  };
+
+  await sendAndSaveMessage({ account, contact, conversation, response, senderType: "bot" });
+  return { handled: true, action: "sent_booking_flow" };
+}
+
 
 function ruleResponseToConfigured(response) {
   const raw = response?.toObject ? response.toObject() : response || {};
@@ -414,6 +466,63 @@ export async function processIncomingMessage(event) {
       return;
     }
 
+    if (event.type === "flow_reply") {
+      const responseJson = event.media?.responseJson || {};
+      const { flowConfigId } = responseJson;
+
+      if (flowConfigId === "booking") {
+        const serviceItemId = responseJson.serviceItemId;
+        let roomName = "";
+        
+        if (serviceItemId) {
+          const room = await ServiceItem.findById(serviceItemId);
+          if (room) roomName = room.name;
+        }
+
+        const booking = await Booking.create({
+          businessId: business._id,
+          contactId: contact._id,
+          conversationId: conversation._id,
+          serviceItemId: serviceItemId || null,
+          type: serviceItemId ? "room_booking" : "appointment",
+          status: "requested",
+          customerName: responseJson.customerName || contact.name || "",
+          customerPhone: responseJson.customerPhone || contact.phone || contact.waId,
+          startDate: responseJson.startDate,
+          startTime: responseJson.startTime,
+          notes: responseJson.notes || "",
+          metadata: new Map(roomName ? [["roomType", roomName]] : []),
+        });
+
+        await sendAndSaveMessage({
+          account,
+          contact,
+          conversation,
+          response: { type: "text", text: "Thank you! Your booking request has been successfully submitted." },
+          senderType: "bot",
+        });
+
+        await writeDecision({
+          businessId: business._id,
+          conversationId: conversation._id,
+          messageId: inboundMessage._id,
+          intent: "booking_request",
+          confidence: 1,
+          actionTaken: "created_booking",
+          metadata: { bookingId: booking._id, fromMetaFlow: true },
+        });
+
+        conversation.botState.active = false;
+        conversation.botState.flowId = null;
+        conversation.botState.flowVersion = null;
+        conversation.botState.currentNodeId = null;
+        conversation.botState.awaitingInput = null;
+        conversation.botState.updatedAt = new Date();
+        await conversation.save();
+        return;
+      }
+    }
+
     if (event.selectionId === "room_list" || textLooksLikeRoomListRequest(event.text || event.selectionTitle || "")) {
       const { response } = await sendRoomList({
         business,
@@ -446,44 +555,7 @@ export async function processIncomingMessage(event) {
       });
 
       if (room) {
-        const booking = await Booking.create({
-          businessId: business._id,
-          contactId: contact._id,
-          conversationId: conversation._id,
-          serviceItemId: room._id,
-          type: "room_booking",
-          status: "requested",
-          customerName: contact.name || "",
-          customerPhone: contact.phone || contact.waId,
-          metadata: new Map([["roomType", room.name]]),
-        });
-
-        conversation.botState.active = true;
-        conversation.botState.flowId = null;
-        conversation.botState.flowVersion = null;
-        conversation.botState.currentNodeId = null;
-        conversation.botState.awaitingInput = {
-          nodeId: "room_booking_name",
-          fieldKey: "customerName",
-          saveTo: "booking",
-          validation: { required: true },
-          nextNodeId: "",
-        };
-        conversation.botState.variables = new Map([
-          ["_bookingId", String(booking._id)],
-          ["serviceItemId", String(room._id)],
-          ["roomType", room.name],
-        ]);
-        conversation.botState.updatedAt = new Date();
-        await conversation.save();
-
-        await sendAndSaveMessage({
-          account,
-          contact,
-          conversation,
-          response: { type: "text", text: `Great, I have selected ${room.name}. May I have your name for the booking?` },
-          senderType: "bot",
-        });
+        const result = await handleSendBookingMetaFlow({ business, account, contact, conversation, serviceItemId: room._id, event });
 
         await writeDecision({
           businessId: business._id,
@@ -491,8 +563,8 @@ export async function processIncomingMessage(event) {
           messageId: inboundMessage._id,
           intent: "booking_request",
           confidence: 1,
-          actionTaken: "created_booking",
-          metadata: { bookingId: booking._id, serviceItemId: room._id, roomType: room.name },
+          actionTaken: result.action || "sent_booking_flow",
+          metadata: { serviceItemId: room._id, roomType: room.name },
         });
         return;
       }
@@ -584,6 +656,17 @@ export async function processIncomingMessage(event) {
     });
 
     if (activeFlowResult.handled) {
+      if (activeFlowResult.action === "send_booking_meta_flow") {
+        await handleSendBookingMetaFlow({
+          business,
+          account,
+          contact,
+          conversation,
+          serviceItemId: activeFlowResult.serviceItemId || activeFlowResult.step?.config?.payload?.serviceItemId,
+          event
+        });
+      }
+
       await writeDecision({
         businessId: business._id,
         conversationId: conversation._id,

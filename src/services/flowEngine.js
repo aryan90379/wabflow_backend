@@ -752,6 +752,43 @@ export async function continueFlowV2({ flow, business, account, contact, convers
     }
 
     if (step.type === "action") {
+      if (step.config?.actionType === "send_meta_flow") {
+        const payload = step.config?.payload || {};
+        const response = {
+          type: "flow",
+          flowId: payload.flowId,
+          flowConfigId: payload.flowConfigId,
+          buttonText: payload.buttonText || "Open Form",
+          text: step.config?.text || "Please fill out the form.",
+        };
+        await sendAndSaveMessage({ account, contact, conversation, response, senderType: "bot" });
+        conversation.botState.currentNodeId = step.id;
+        conversation.botState.awaitingInput = {
+          nodeId: step.id,
+          fieldKey: "meta_flow_response",
+          saveTo: "booking",
+          validation: {},
+          nextNodeId: step.config?.nextStepId || "",
+        };
+        conversation.botState.updatedAt = new Date();
+        await conversation.save();
+        return { handled: true, action: "sent_meta_flow", flow };
+      }
+
+      if (step.config?.actionType === "send_booking_form") {
+        conversation.botState.currentNodeId = step.id;
+        conversation.botState.awaitingInput = {
+          nodeId: step.id,
+          fieldKey: "meta_flow_response",
+          saveTo: "booking",
+          validation: {},
+          nextNodeId: step.config?.nextStepId || "",
+        };
+        conversation.botState.updatedAt = new Date();
+        await conversation.save();
+        return { handled: true, action: "send_booking_meta_flow", flow, step };
+      }
+
       // similar to V1 action node
       const actionNodeEquivalent = {
           action: {

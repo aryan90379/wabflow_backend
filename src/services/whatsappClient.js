@@ -275,7 +275,7 @@ export function buildWhatsappPayload(
             flow_action: "navigate",
             flow_action_payload: {
               screen: "BOOKING_FORM",
-              data: {}
+              data: configuredResponse.flowData || {}
             }
           }
         }
