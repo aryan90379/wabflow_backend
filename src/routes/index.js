@@ -146,6 +146,7 @@ businessRouter.get("/flows", requirePermission("flows.view"), asyncHandler(listF
 businessRouter.post("/flows", requirePermission("flows.create"), asyncHandler(createFlow));
 businessRouter.get("/flows/:flowId", requirePermission("flows.view"), asyncHandler(getFlow));
 businessRouter.patch("/flows/:flowId", requirePermission("flows.edit"), asyncHandler(updateFlow));
+businessRouter.put("/flows/:flowId", requirePermission("flows.edit"), asyncHandler(updateFlow));
 businessRouter.post("/flows/:flowId/publish", requirePermission("flows.edit"), asyncHandler(publishFlow));
 
 businessRouter.post("/flows/generate-booking", requirePermission("flows.create"), asyncHandler(generateBookingFlow));
