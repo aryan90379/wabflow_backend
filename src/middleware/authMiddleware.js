@@ -57,10 +57,18 @@ export async function authMiddleware(req, res, next) {
         return res.status(401).json({ success: false, error: "Invalid token payload." });
       }
 
-      const user = await User.findById(userId).select("name profilepic").lean();
+      const user = await User.findById(userId).select("name profilepic email googleEmail appleEmail").lean();
 
       req.authType = "owner";
-      req.user = { ...payload, userId, name: user?.name || payload.name || "", profilepic: user?.profilepic || payload.profilepic || "" };
+      req.user = { 
+        ...payload, 
+        userId, 
+        name: user?.name || payload.name || "", 
+        profilepic: user?.profilepic || payload.profilepic || "",
+        email: user?.email || payload.email || "",
+        googleEmail: user?.googleEmail || payload.googleEmail || "",
+        appleEmail: user?.appleEmail || payload.appleEmail || ""
+      };
       req.userId = userId;
       req.actor = {
         type: "owner",
