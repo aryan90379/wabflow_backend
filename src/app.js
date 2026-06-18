@@ -22,6 +22,14 @@ app.use(
 );
 app.use(express.urlencoded({ extended: true, limit: "12mb" }));
 app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
+
+// Serve static downloads (e.g. APK files)
+import path from "path";
+import { fileURLToPath } from "url";
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+app.use("/downloads", express.static(path.join(__dirname, "../downloads")));
+
 app.use("/api/meta", metaRoutes);
 app.use("/api", apiRouter);
 app.use(notFoundHandler);
