@@ -157,7 +157,12 @@ export async function demoLogin(req, res) {
     return res.status(401).json({ success: false, error: "Invalid demo credentials." });
   }
 
-  const user = await User.findOne({ email: DEMO_EMAIL });
+  const user = await User.findOne({
+    $or: [
+      { email: DEMO_EMAIL },
+      { googleEmail: DEMO_EMAIL },
+    ],
+  });
   if (!user) {
     return res.status(404).json({ success: false, error: "Demo account not found. Please contact support." });
   }
