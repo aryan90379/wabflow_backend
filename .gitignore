@@ -9,7 +9,8 @@ coverage/
 *.log
 .DS_Store
 AuthKey.p8
-.env
-.env
-node_modules/
 .next/
+
+# Ignore downloads except gitkeep
+downloads/*
+!downloads/.gitkeep
