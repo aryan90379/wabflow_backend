@@ -55,6 +55,10 @@ const businessSchema = new mongoose.Schema(
       maxStaff: { type: Number, default: 5 },
     },
     active: { type: Boolean, default: true },
+    subscription: {
+      plan: { type: String, enum: ["free_trial", "pro", "enterprise"], default: "free_trial" },
+      validUntil: { type: Date, default: () => new Date(Date.now() + 20 * 24 * 60 * 60 * 1000) },
+    },
   },
   { timestamps: true }
 );
