@@ -139,6 +139,36 @@ export async function googleAuth(req, res) {
   }
 }
 
+// ─── Demo Login (Apple Reviewer Backdoor) ───────────────────────────────────
+const DEMO_EMAIL    = "songrimleader@gmail.com";
+const DEMO_PASSWORD = "AppleReview2026";
+
+export async function demoLogin(req, res) {
+  const { email, password } = req.body;
+
+  if (!email || !password) {
+    return res.status(400).json({ success: false, error: "Email and password are required." });
+  }
+
+  if (
+    String(email).toLowerCase().trim() !== DEMO_EMAIL ||
+    password !== DEMO_PASSWORD
+  ) {
+    return res.status(401).json({ success: false, error: "Invalid demo credentials." });
+  }
+
+  const user = await User.findOne({ email: DEMO_EMAIL });
+  if (!user) {
+    return res.status(404).json({ success: false, error: "Demo account not found. Please contact support." });
+  }
+
+  return res.json({
+    success: true,
+    token: createAppToken(user),
+    user,
+  });
+}
+
 export async function linkGoogleAuth(req, res) {
   try {
     if (req.authType === "staff") {

@@ -13,7 +13,8 @@ import {
   googleAuth,
   staffLogin,
   staffLogout,
-  deleteAccount
+  deleteAccount,
+  demoLogin,
 } from "../controllers/authController.js";
 import {
   listTeamMembers,
@@ -107,6 +108,7 @@ apiRouter.post("/auth/link/google", authMiddleware, asyncHandler(linkGoogleAuth)
 apiRouter.post("/auth/link/apple", authMiddleware, asyncHandler(linkAppleAuth));
 apiRouter.post("/auth/staff/login", asyncHandler(staffLogin));
 apiRouter.post("/auth/staff/logout", authMiddleware, asyncHandler(staffLogout));
+apiRouter.post("/auth/demo-login", asyncHandler(demoLogin));
 apiRouter.get("/auth/me", authMiddleware, asyncHandler(getMe));
 apiRouter.patch("/auth/me", authMiddleware, asyncHandler(updateMe));
 apiRouter.delete("/auth/me", authMiddleware, asyncHandler(deleteAccount));
