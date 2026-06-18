@@ -91,12 +91,6 @@ import {
 
 import { generateBookingFlow } from "../controllers/metaFlowController.js";
 import { receiveWebhook, verifyWebhook } from "../controllers/webhookController.js";
-import {
-  getRooms,
-  createRoom,
-  updateRoom,
-  deleteRoom,
-} from "../controllers/roomController.js";
 import { getTutorials, updateTutorials } from "../controllers/tutorialController.js";
 
 const apiRouter = Router();
@@ -118,11 +112,6 @@ apiRouter.patch("/auth/me", authMiddleware, asyncHandler(updateMe));
 apiRouter.get("/webhooks/whatsapp", verifyWebhook);
 apiRouter.post("/webhooks/whatsapp", receiveWebhook);
 
-// --- Rooms ---
-apiRouter.get("/businesses/:businessId/rooms", authMiddleware, requireBusinessAccess, asyncHandler(getRooms));
-apiRouter.post("/businesses/:businessId/rooms", authMiddleware, requireBusinessAccess, requirePermission("catalog", "edit"), asyncHandler(createRoom));
-apiRouter.put("/businesses/:businessId/rooms/:roomId", authMiddleware, requireBusinessAccess, requirePermission("catalog", "edit"), asyncHandler(updateRoom));
-apiRouter.delete("/businesses/:businessId/rooms/:roomId", authMiddleware, requireBusinessAccess, requirePermission("catalog", "edit"), asyncHandler(deleteRoom));
 
 // --- Tutorials ---
 apiRouter.get("/tutorials", authMiddleware, asyncHandler(getTutorials));
