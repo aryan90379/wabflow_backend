@@ -24,6 +24,7 @@ import {
   revokeMemberAccess,
   enableMemberAccess,
   disableMemberAccess,
+  deleteTeamMember,
   listMemberSessions,
   revokeMemberSession,
   listAuditLogs
@@ -201,6 +202,7 @@ businessRouter.post("/team/:memberId/reset-password", requirePermission("team.re
 businessRouter.post("/team/:memberId/revoke", requirePermission("team.revoke"), asyncHandler(revokeMemberAccess));
 businessRouter.post("/team/:memberId/enable", requirePermission("team.edit"), asyncHandler(enableMemberAccess));
 businessRouter.post("/team/:memberId/disable", requirePermission("team.edit"), asyncHandler(disableMemberAccess));
+businessRouter.delete("/team/:memberId", requirePermission("team.revoke"), asyncHandler(deleteTeamMember));
 businessRouter.get("/team/:memberId/sessions", requirePermission("team.view"), asyncHandler(listMemberSessions));
 businessRouter.delete("/team/:memberId/sessions/:sessionId", requirePermission("team.revoke"), asyncHandler(revokeMemberSession));
 

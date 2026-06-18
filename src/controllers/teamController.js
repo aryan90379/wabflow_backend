@@ -160,6 +160,37 @@ export async function revokeMemberAccess(req, res) {
   return res.json({ success: true, message: "Member access revoked." });
 }
 
+export async function deleteTeamMember(req, res) {
+  const { businessId, memberId } = req.params;
+
+  const member = await BusinessMember.findOne({ _id: memberId, businessId });
+  if (!member) return res.status(404).json({ success: false, error: "Member not found." });
+  if (member.memberType === "owner" || member.role === "owner") {
+    return res.status(400).json({ success: false, error: "Business owner cannot be deleted from team access." });
+  }
+
+  const before = {
+    name: member.name,
+    displayName: member.displayName,
+    role: member.role,
+    status: member.status,
+    staffCode: member.staffCode,
+  };
+
+  await StaffSession.updateMany(
+    { memberId, status: "active" },
+    { status: "revoked", revokedAt: new Date(), revokedBy: req.actor.memberId || null }
+  );
+  await BusinessMember.deleteOne({ _id: memberId, businessId });
+
+  await logAudit(businessId, req.actor, "staff.deleted", "BusinessMember", member._id, {
+    before,
+    after: null
+  });
+
+  return res.json({ success: true, message: "Team member deleted." });
+}
+
 export async function disableMemberAccess(req, res) {
   const { businessId, memberId } = req.params;
   
