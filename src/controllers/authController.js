@@ -601,3 +601,58 @@ export async function staffLogout(req, res) {
     return res.status(500).json({ success: false, error: "Server error." });
   }
 }
+
+export async function deleteAccount(req, res) {
+  try {
+    if (req.authType !== "owner") {
+      return res.status(403).json({ success: false, error: "Only account owners can delete their account." });
+    }
+
+    const userId = req.userId;
+
+    const { Contact } = await import("../models/Contact.js");
+    const { Conversation } = await import("../models/Conversation.js");
+    const { Message } = await import("../models/Message.js");
+    const { Booking } = await import("../models/Booking.js");
+    const { Lead } = await import("../models/Lead.js");
+    const { FollowUpTask } = await import("../models/FollowUpTask.js");
+    const { WhatsappAccount } = await import("../models/WhatsappAccount.js");
+    const { WhatsappMessageTemplate } = await import("../models/WhatsappMessageTemplate.js");
+    const { AutomationFlow } = await import("../models/AutomationFlow.js");
+    const { AutomationRule } = await import("../models/AutomationRule.js");
+    const { ServiceItem } = await import("../models/ServiceItem.js");
+    const { BotKnowledge } = await import("../models/BotKnowledge.js");
+    const { BotDecisionLog } = await import("../models/BotDecisionLog.js");
+    const { HandoffRequest } = await import("../models/HandoffRequest.js");
+
+    const businesses = await Business.find({ ownerId: userId }).lean();
+    const businessIds = businesses.map(b => b._id);
+
+    if (businessIds.length > 0) {
+      await Contact.deleteMany({ businessId: { $in: businessIds } });
+      await Conversation.deleteMany({ businessId: { $in: businessIds } });
+      await Message.deleteMany({ businessId: { $in: businessIds } });
+      await Booking.deleteMany({ businessId: { $in: businessIds } });
+      await Lead.deleteMany({ businessId: { $in: businessIds } });
+      await FollowUpTask.deleteMany({ businessId: { $in: businessIds } });
+      await WhatsappAccount.deleteMany({ businessId: { $in: businessIds } });
+      await WhatsappMessageTemplate.deleteMany({ businessId: { $in: businessIds } });
+      await AutomationFlow.deleteMany({ businessId: { $in: businessIds } });
+      await AutomationRule.deleteMany({ businessId: { $in: businessIds } });
+      await ServiceItem.deleteMany({ businessId: { $in: businessIds } });
+      await BotKnowledge.deleteMany({ businessId: { $in: businessIds } });
+      await BotDecisionLog.deleteMany({ businessId: { $in: businessIds } });
+      await HandoffRequest.deleteMany({ businessId: { $in: businessIds } });
+      await BusinessMember.deleteMany({ businessId: { $in: businessIds } });
+      await AuditLog.deleteMany({ businessId: { $in: businessIds } });
+      await Business.deleteMany({ _id: { $in: businessIds } });
+    }
+
+    await User.deleteOne({ _id: userId });
+
+    return res.json({ success: true, message: "Account completely deleted." });
+  } catch (error) {
+    console.error("❌ Delete account error:", error);
+    return res.status(500).json({ success: false, error: "Server error during account deletion." });
+  }
+}

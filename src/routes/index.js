@@ -12,7 +12,8 @@ import {
   updateMe,
   googleAuth,
   staffLogin,
-  staffLogout
+  staffLogout,
+  deleteAccount
 } from "../controllers/authController.js";
 import {
   listTeamMembers,
@@ -108,6 +109,7 @@ apiRouter.post("/auth/staff/login", asyncHandler(staffLogin));
 apiRouter.post("/auth/staff/logout", authMiddleware, asyncHandler(staffLogout));
 apiRouter.get("/auth/me", authMiddleware, asyncHandler(getMe));
 apiRouter.patch("/auth/me", authMiddleware, asyncHandler(updateMe));
+apiRouter.delete("/auth/me", authMiddleware, asyncHandler(deleteAccount));
 
 apiRouter.get("/webhooks/whatsapp", verifyWebhook);
 apiRouter.post("/webhooks/whatsapp", receiveWebhook);
