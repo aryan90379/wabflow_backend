@@ -115,16 +115,29 @@ export async function saveInboundMessage({ account, contact, conversation, event
     throw error;
   }
 
-  // Trigger a push notification for EVERY inbound message
-  notificationService.notifyBusinessStaff(account.businessId, {
-    type: "NEW_MESSAGE",
-    title: `New message from ${contact.name || contact.phone}`,
-    body: message.text || "Sent an attachment/media",
-    payload: { 
-      conversationId: conversation._id.toString(), 
-      messageId: message._id.toString() 
-    }
-  });
+  // Also if this is literally the very first message ever for this conversation:
+  const messageCount = await Message.countDocuments({ conversationId: conversation._id });
+  const isFirstMessage = messageCount <= 1; // <= 1 because we just created the message above
+
+  if (isFirstMessage) {
+    notificationService.notifyBusinessStaff(account.businessId, {
+      type: "NEW_CHAT",
+      title: "New Lead / Chat",
+      body: `${contact.name || contact.phone} just started a new conversation!`,
+      payload: { conversationId: conversation._id.toString() }
+    });
+  } else if (conversation.status === "human_needed" || conversation.botState?.active === false) {
+    // Only send push notifications for every message IF the bot is turned off or human handoff is requested
+    notificationService.notifyBusinessStaff(account.businessId, {
+      type: "NEW_MESSAGE",
+      title: `New message from ${contact.name || contact.phone}`,
+      body: message.text || "Sent an attachment/media",
+      payload: { 
+        conversationId: conversation._id.toString(), 
+        messageId: message._id.toString() 
+      }
+    });
+  }
 
   await Conversation.updateOne(
     { _id: conversation._id },
@@ -284,6 +297,14 @@ export async function createHandoff({ business, contact, conversation, reason, m
   conversation.botState.awaitingInput = null;
   conversation.botState.updatedAt = new Date();
   await conversation.save();
+
+  // Notify staff that a human is needed!
+  notificationService.notifyBusinessStaff(business._id, {
+    type: "HUMAN_HANDOFF",
+    title: "Human Support Requested",
+    body: `${contact.name || contact.phone} needs to speak with a human. Reason: ${reason}`,
+    payload: { conversationId: conversation._id.toString() }
+  });
 
   if (message && account) {
     await sendAndSaveMessage({
