@@ -150,7 +150,7 @@ async function syncBusinessTemplates(businessId) {
               language: item.language || "en_US",
               status: normalizeTemplateStatus(item.status),
               rejectionReason: item.rejected_reason || "",
-              ...(parsed.body ? { body: parsed.body } : {}),
+              body: parsed.body || "Synced from Meta.",
               ...(parsed.footer ? { footer: parsed.footer } : {}),
               ...(parsed.buttons.length ? { buttons: parsed.buttons } : {}),
               lastSyncedAt: new Date(),
@@ -158,7 +158,6 @@ async function syncBusinessTemplates(businessId) {
             $setOnInsert: {
               wabaId: account.wabaId,
               displayName: item.name || "WhatsApp template",
-              body: parsed.body || "Synced from Meta.",
             },
           },
           { upsert: true, new: true, setDefaultsOnInsert: true }
