@@ -22,6 +22,8 @@ export const notificationWorker = new Worker(
   "push-notifications",
   async (job) => {
     const { notificationId } = job.data;
+    console.log(`\n========================================`);
+    console.log(`[Worker] Started processing Job ${job.id} (Type: ${job.name})`);
 
     try {
       // 1. Fetch Notification
@@ -41,9 +43,10 @@ export const notificationWorker = new Worker(
         pushToken: { $exists: true, $ne: "" },
         status: "active" // Assuming active sessions only
       });
+      console.log(`[Worker] Found ${sessions.length} active sessions with push tokens for user ${notification.recipientId}`);
 
       if (sessions.length === 0) {
-        console.warn(`[Worker] No active push tokens for user: ${notification.recipientId}`);
+        console.warn(`[Worker] SKIP: No active push tokens for user ${notification.recipientId}`);
         notification.status = "failed";
         notification.error = "No active push tokens";
         await notification.save();
@@ -67,9 +70,11 @@ export const notificationWorker = new Worker(
       };
 
       // 5. Send via Firebase Admin
+      console.log(`[Worker] Dispatching FCM message to ${tokens.length} unique tokens...`);
       const response = await messaging.sendEachForMulticast(message);
       
-      console.log(`[Worker] Sent push notification for ${notificationId}: ${response.successCount} success, ${response.failureCount} failed.`);
+      console.log(`[Worker] ✅ Sent push notification! Success: ${response.successCount}, Failed: ${response.failureCount}`);
+      console.log(`========================================\n`);
 
       // Optional: Cleanup invalid tokens based on responses
       const failedTokens = [];

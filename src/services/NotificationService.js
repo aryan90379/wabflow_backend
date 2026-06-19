@@ -18,6 +18,7 @@ class NotificationService {
       });
 
       // Add to BullMQ Queue
+      console.log(`[NotificationService] Enqueuing '${type}' notification for user ${recipientId} (Notification ID: ${notification._id})`);
       await notificationQueue.add(
         type,
         { notificationId: notification._id },
@@ -44,7 +45,10 @@ class NotificationService {
    */
   async notifyBusinessStaff(businessId, { type, title, body, payload }) {
     try {
+      console.log(`[NotificationService] Triggered business-wide notification: '${type}' for business ${businessId}`);
       const members = await BusinessMember.find({ businessId, status: "active" });
+      console.log(`[NotificationService] Found ${members.length} active staff members to notify.`);
+      
       const promises = members.map(member => 
         this.queueNotification({
           businessId,
