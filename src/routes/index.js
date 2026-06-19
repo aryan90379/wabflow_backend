@@ -91,6 +91,15 @@ import {
   updateHandoff,
   updateLead,
 } from "../controllers/crmController.js";
+import {
+  getLists,
+  createList,
+  updateList,
+  deleteList,
+  createListItem,
+  updateListItem,
+  deleteListItem,
+} from "../controllers/list.controller.js";
 
 import { generateBookingFlow } from "../controllers/metaFlowController.js";
 import { receiveWebhook, verifyWebhook } from "../controllers/webhookController.js";
@@ -159,6 +168,15 @@ businessRouter.get("/rules", requirePermission("settings.view"), asyncHandler(li
 businessRouter.post("/rules", requirePermission("settings.edit"), asyncHandler(createRule));
 businessRouter.patch("/rules/:ruleId", requirePermission("settings.edit"), asyncHandler(updateRule));
 businessRouter.delete("/rules/:ruleId", requirePermission("settings.edit"), asyncHandler(deleteRule));
+
+businessRouter.get("/lists", requirePermission("settings.view"), asyncHandler(getLists));
+businessRouter.post("/lists", requirePermission("settings.edit"), asyncHandler(createList));
+businessRouter.put("/lists/:id", requirePermission("settings.edit"), asyncHandler(updateList));
+businessRouter.delete("/lists/:id", requirePermission("settings.edit"), asyncHandler(deleteList));
+
+businessRouter.post("/lists/:id/items", requirePermission("settings.edit"), asyncHandler(createListItem));
+businessRouter.put("/lists/items/:itemId", requirePermission("settings.edit"), asyncHandler(updateListItem));
+businessRouter.delete("/lists/items/:itemId", requirePermission("settings.edit"), asyncHandler(deleteListItem));
 
 businessRouter.get("/flows", requirePermission("flows.view"), asyncHandler(listFlows));
 businessRouter.post("/flows", requirePermission("flows.create"), asyncHandler(createFlow));
