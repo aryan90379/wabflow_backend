@@ -6,7 +6,7 @@ const notificationSchema = new mongoose.Schema(
     recipientId: { type: mongoose.Schema.Types.ObjectId, ref: "BusinessMember", required: true, index: true },
     type: { 
       type: String, 
-      enum: ["NEW_CHAT", "NEW_LEAD", "NEW_BOOKING", "SYSTEM"], 
+      enum: ["NEW_CHAT", "NEW_MESSAGE", "NEW_LEAD", "NEW_BOOKING", "HUMAN_HANDOFF", "SYSTEM"], 
       required: true 
     },
     title: { type: String, required: true },
