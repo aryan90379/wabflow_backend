@@ -33,6 +33,7 @@ import {
   generateBookingFlowJson,
   prepareBookingFlowImages,
 } from "./metaFlowService.js";
+import { notificationService } from "./NotificationService.js";
 
 function hashFlowDefinition(flowJson) {
   return crypto
@@ -469,6 +470,14 @@ async function continueRoomBookingShortcut({ conversation, account, contact, eve
     response: { type: "text", text: "Thanks! We have received your room booking request. Our team will check availability and confirm here shortly." },
     senderType: "bot",
   });
+
+  notificationService.notifyBusinessStaff(business._id, {
+    type: "NEW_BOOKING",
+    title: "New Booking Received",
+    body: `You have a new booking from ${booking.customerName}`,
+    payload: { bookingId: booking._id.toString() }
+  });
+
   return { handled: true, action: "created_booking" };
 }
 
@@ -663,6 +672,13 @@ export async function processIncomingMessage(event) {
           confidence: 1,
           actionTaken: "created_booking",
           metadata: { bookingId: booking._id, fromMetaFlow: true },
+        });
+
+        notificationService.notifyBusinessStaff(business._id, {
+          type: "NEW_BOOKING",
+          title: "New Booking Received",
+          body: `You have a new booking request from ${booking.customerName}`,
+          payload: { bookingId: booking._id.toString() }
         });
 
         conversation.botState.active = false;

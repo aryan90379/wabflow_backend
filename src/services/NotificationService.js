@@ -1,4 +1,5 @@
 import { Notification } from "../models/Notification.js";
+import { BusinessMember } from "../models/BusinessMember.js";
 import { notificationQueue } from "../workers/notificationWorker.js";
 
 class NotificationService {
@@ -35,6 +36,28 @@ class NotificationService {
     } catch (error) {
       console.error("[NotificationService] Error queuing notification:", error);
       throw error;
+    }
+  }
+
+  /**
+   * Helper to send notification to all active staff members of a business
+   */
+  async notifyBusinessStaff(businessId, { type, title, body, payload }) {
+    try {
+      const members = await BusinessMember.find({ businessId, status: "active" });
+      const promises = members.map(member => 
+        this.queueNotification({
+          businessId,
+          recipientId: member._id,
+          type,
+          title,
+          body,
+          payload,
+        }).catch(err => console.error(`Failed to queue notification for member ${member._id}:`, err))
+      );
+      await Promise.all(promises);
+    } catch (error) {
+      console.error("[NotificationService] Error in notifyBusinessStaff:", error);
     }
   }
 

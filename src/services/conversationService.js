@@ -7,6 +7,7 @@ import {
 import { sendConfiguredWhatsappResponse } from "./whatsappClient.js";
 import { broadcastToBusiness } from "./socketService.js";
 import { broadcastRawToBusiness } from "./rawChatSocketService.js";
+import { notificationService } from "./NotificationService.js";
 
 const MAP_URL_PATTERN = /https?:\/\/(?:maps\.app\.goo\.gl|(?:www\.)?google\.[^\s/]+\/maps|goo\.gl\/maps)\/\S+/i;
 
