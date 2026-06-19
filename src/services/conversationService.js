@@ -115,6 +115,17 @@ export async function saveInboundMessage({ account, contact, conversation, event
     throw error;
   }
 
+  // Trigger a push notification for EVERY inbound message
+  notificationService.notifyBusinessStaff(account.businessId, {
+    type: "NEW_MESSAGE",
+    title: `New message from ${contact.name || contact.phone}`,
+    body: message.text || "Sent an attachment/media",
+    payload: { 
+      conversationId: conversation._id.toString(), 
+      messageId: message._id.toString() 
+    }
+  });
+
   await Conversation.updateOne(
     { _id: conversation._id },
     {

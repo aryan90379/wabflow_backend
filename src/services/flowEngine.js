@@ -826,7 +826,10 @@ export async function continueFlowV2({ flow, business, account, contact, convers
       }
 
       conversation.botState.variables.delete("_listItemGroupIds");
-      conversation.botState.currentNodeId = config.nextStepId || null;
+      conversation.botState.active = false;
+      conversation.botState.currentNodeId = null;
+      conversation.botState.awaitingInput = null;
+      conversation.status = conversation.status === "human_needed" ? "human_needed" : "open";
       conversation.botState.updatedAt = new Date();
       await conversation.save();
       return { handled: true, action: "sent_reply", flow };
