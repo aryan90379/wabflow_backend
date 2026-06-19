@@ -6,6 +6,7 @@ import {
   Contact,
   Conversation,
 } from "../models/index.js";
+import { ListItem } from "../models/ListItem.js";
 import { interpolate, normalizeText } from "../utils/text.js";
 import { createHandoff, sendAndSaveMessage } from "./conversationService.js";
 
@@ -105,6 +106,57 @@ function isBookingPresetAction(action = {}) {
     targetStepId.startsWith("step_notes_") ||
     targetStepId.startsWith("step_booking_act_")
   );
+}
+
+function isListItemsPresetAction(action = {}) {
+  const targetStepId = String(action.targetStepId || "");
+  return action.preset === "preset_list_items" || targetStepId.startsWith("step_list_items_");
+}
+
+function isListItemsStep(step = {}) {
+  return String(step.id || "").startsWith("step_list_items_") || Array.isArray(step.config?.listItems);
+}
+
+function normalizeListItem(item = {}) {
+  const plain = item?.toObject ? item.toObject() : item;
+  return {
+    id: String(plain._id || plain.id || ""),
+    title: String(plain.title || "").trim(),
+    details: String(plain.details || "").trim(),
+    price: plain.price,
+    currency: String(plain.currency || "INR").trim() || "INR",
+    imageUrl: String(plain.imageUrl || "").trim(),
+  };
+}
+
+function buildListItemText(item = {}) {
+  const parts = [item.title];
+  if (item.price !== null && item.price !== undefined && item.price !== "") {
+    parts.push(`Price: ${item.currency || "INR"} ${item.price}`);
+  }
+  if (item.details) parts.push(item.details);
+  return parts.filter(Boolean).join("\n\n");
+}
+
+async function getListItemsForStep(step = {}, context) {
+  const variables = context.conversation.botState.variables;
+  const configuredGroupIds = variables.get("_listItemGroupIds") || step.config?.listGroupIds || [];
+  const groupIds = Array.isArray(configuredGroupIds)
+    ? configuredGroupIds.map(String).filter(Boolean)
+    : [];
+
+  if (groupIds.length) {
+    const dbItems = await ListItem.find({
+      businessId: context.business._id,
+      listGroupId: { $in: groupIds },
+      active: true,
+    }).sort({ createdAt: -1 });
+
+    if (dbItems.length) return dbItems.slice(0, 10).map(normalizeListItem);
+  }
+
+  const configuredItems = Array.isArray(step.config?.listItems) ? step.config.listItems : [];
+  return configuredItems.map(normalizeListItem).filter((item) => item.title);
 }
 
 function isLegacyBookingQuestion(step = {}) {
@@ -499,6 +551,9 @@ async function processOptionSelectionV2(flow, context) {
   if (isBookingPresetAction(button.action)) {
     context.conversation.botState.variables.set("_sendBookingMetaFlow", true);
   }
+  if (isListItemsPresetAction(button.action)) {
+    context.conversation.botState.variables.set("_listItemGroupIds", button.action?.listGroupIds || []);
+  }
   
   if (button.action?.targetStepId) {
     context.conversation.botState.currentNodeId = button.action.targetStepId || selectedStep.config?.nextStepId || null;
@@ -745,6 +800,37 @@ export async function continueFlowV2({ flow, business, account, contact, convers
     if (!step) throw new Error(`Flow step ${currentNodeId} was not found.`);
 
     const variables = buildVariables(context);
+
+    if (isListItemsStep(step)) {
+      const config = step.config || {};
+      const responseText = config.text || "Here are the available items.";
+      const items = await getListItemsForStep(step, context);
+
+      if (responseText) {
+        const response = renderResponse({ type: "text", text: responseText }, variables);
+        await sendAndSaveMessage({ account, contact, conversation, response, senderType: "bot" });
+      }
+
+      if (!items.length) {
+        const response = renderResponse({ type: "text", text: "No items are available right now." }, variables);
+        await sendAndSaveMessage({ account, contact, conversation, response, senderType: "bot" });
+      } else {
+        for (const item of items) {
+          const response = renderResponse({
+            type: item.imageUrl ? "image" : "text",
+            text: buildListItemText(item),
+            mediaUrl: item.imageUrl,
+          }, variables);
+          await sendAndSaveMessage({ account, contact, conversation, response, senderType: "bot" });
+        }
+      }
+
+      conversation.botState.variables.delete("_listItemGroupIds");
+      conversation.botState.currentNodeId = config.nextStepId || null;
+      conversation.botState.updatedAt = new Date();
+      await conversation.save();
+      return { handled: true, action: "sent_reply", flow };
+    }
 
     if (step.type === "message" || step.type === "question") {
       const config = step.config || {};

@@ -105,6 +105,8 @@ import { generateBookingFlow } from "../controllers/metaFlowController.js";
 import { receiveWebhook, verifyWebhook } from "../controllers/webhookController.js";
 import { getTutorials, updateTutorials } from "../controllers/tutorialController.js";
 
+import deviceRoutes from "./deviceRoutes.js";
+
 const apiRouter = Router();
 
 apiRouter.get("/health", (req, res) => {
@@ -130,6 +132,9 @@ apiRouter.post("/webhooks/whatsapp", receiveWebhook);
 // --- Tutorials ---
 apiRouter.get("/tutorials", authMiddleware, asyncHandler(getTutorials));
 apiRouter.post("/tutorials", authMiddleware, asyncHandler(updateTutorials));
+
+// --- Device ---
+apiRouter.use("/device", deviceRoutes);
 
 const businessesRouter = Router();
 businessesRouter.use(authMiddleware);

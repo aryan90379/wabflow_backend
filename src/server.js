@@ -4,6 +4,7 @@ import { env } from "./config/env.js";
 import { startFollowUpWorker } from "./services/followUpWorker.js";
 import { initSocket } from "./services/socketService.js";
 import { initRawChatSocket } from "./services/rawChatSocketService.js";
+import { notificationQueue, notificationWorker } from "./workers/notificationWorker.js";
 
 async function start() {
   await connectDatabase();
@@ -17,9 +18,14 @@ async function start() {
 
   const followUpTimer = startFollowUpWorker();
 
-  const shutdown = (signal) => {
+  const shutdown = async (signal) => {
     console.log(`[server] ${signal} received, shutting down`);
     clearInterval(followUpTimer);
+    
+    // Gracefully shut down BullMQ
+    await notificationWorker.close();
+    await notificationQueue.close();
+
     server.close(() => process.exit(0));
   };
 
