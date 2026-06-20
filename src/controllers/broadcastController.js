@@ -88,7 +88,15 @@ export async function listBroadcastRecipients(req, res) {
   const limit = Math.min(200, Math.max(1, Number(req.query.limit || 80)));
   const page = Math.max(1, Number(req.query.page || 1));
   const filter = { broadcastJobId: job._id };
-  if (req.query.status && req.query.status !== "all") filter.status = req.query.status;
+  if (req.query.status && req.query.status !== "all") {
+    if (req.query.status === "pending") {
+      filter.status = { $in: ["queued", "sending", "accepted"] };
+    } else if (req.query.status === "sent") {
+      filter.status = { $in: ["sent", "delivered", "read"] };
+    } else {
+      filter.status = req.query.status;
+    }
+  }
 
   const [items, total] = await Promise.all([
     BroadcastRecipient.find(filter)

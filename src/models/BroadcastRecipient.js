@@ -10,13 +10,14 @@ const broadcastRecipientSchema = new mongoose.Schema(
     customerName: { type: String, default: "" },
     status: {
       type: String,
-      enum: ["queued", "sending", "sent", "failed", "skipped"],
+      enum: ["queued", "sending", "accepted", "sent", "delivered", "read", "failed", "skipped"],
       default: "queued",
       index: true,
     },
     error: { type: String, default: "" },
     conversationId: { type: mongoose.Schema.Types.ObjectId, ref: "Conversation" },
     messageId: { type: mongoose.Schema.Types.ObjectId, ref: "Message" },
+    whatsappMessageId: { type: String, index: true },
     sentAt: Date,
   },
   { timestamps: true }

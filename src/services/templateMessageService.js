@@ -68,7 +68,6 @@ export async function sendApprovedTemplateMessage({
   try {
     const result = await sendWhatsappTemplatePayload(account._id, phone, template);
     temporaryMessage.whatsappMessageId = result?.messages?.[0]?.id || null;
-    temporaryMessage.status = "sent";
     await temporaryMessage.save();
 
     await Conversation.updateOne(

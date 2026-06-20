@@ -1,6 +1,9 @@
-import { Message, WhatsappAccount } from "../models/index.js";
+import { BroadcastRecipient, Message, WhatsappAccount } from "../models/index.js";
 import { extractWhatsappEvents } from "./webhookParser.js";
 import { processIncomingMessage } from "./botEngine.js";
+import { emitBroadcastProgress, refreshBroadcastJobCounts } from "./broadcastProgressService.js";
+import { broadcastToBusiness } from "./socketService.js";
+import { broadcastRawToBusiness } from "./rawChatSocketService.js";
 
 const validStatuses = new Set([
   "sent",
@@ -14,7 +17,7 @@ async function processStatus(event) {
     return;
   }
 
-  await Message.updateOne(
+  const message = await Message.findOneAndUpdate(
     {
       whatsappMessageId: event.messageId,
     },
@@ -27,8 +30,36 @@ async function processStatus(event) {
             }
           : {}),
       },
-    }
+    },
+    { new: true }
   );
+
+  if (message?.businessId) {
+    const messagePayload = message.toObject();
+    broadcastToBusiness(String(message.businessId), "new_message", messagePayload);
+    broadcastRawToBusiness(String(message.businessId), "new_message", messagePayload);
+  }
+
+  const recipient = await BroadcastRecipient.findOneAndUpdate(
+    { whatsappMessageId: event.messageId },
+    {
+      $set: {
+        status: event.status,
+        ...(event.status === "sent" || event.status === "delivered" || event.status === "read"
+          ? { sentAt: new Date() }
+          : {}),
+        ...(event.errors?.length
+          ? { error: event.errors.map(item => item?.message || item?.title || String(item)).join(", ") }
+          : { error: "" }),
+      },
+    },
+    { new: true }
+  );
+
+  if (recipient?.broadcastJobId) {
+    const job = await refreshBroadcastJobCounts(recipient.broadcastJobId);
+    if (job) emitBroadcastProgress(job, recipient);
+  }
 }
 
 async function findActiveAccount(phoneNumberId) {
