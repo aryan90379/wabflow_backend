@@ -692,7 +692,7 @@ export async function processIncomingMessage(event) {
       }
     }
 
-    if (event.selectionId === "room_list" || textLooksLikeRoomListRequest(event.text || event.selectionTitle || "")) {
+    if (event.selectionId === "room_list" || (!event.selectionId && textLooksLikeRoomListRequest(event.text || ""))) {
       const { response } = await sendRoomList({
         business,
         account,
@@ -854,7 +854,7 @@ export async function processIncomingMessage(event) {
       return;
     }
 
-    if (intent === "booking_request" || textLooksLikeBookingRequest(event.text || event.selectionTitle || "")) {
+    if (intent === "booking_request" || (!event.selectionId && textLooksLikeBookingRequest(event.text || ""))) {
       console.log("[booking] Handling booking request fallback", {
         businessId: String(business._id),
         selectionId: event.selectionId || "",
