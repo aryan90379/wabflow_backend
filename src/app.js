@@ -5,6 +5,7 @@ import morgan from "morgan";
 import { apiRouter } from "./routes/index.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 import metaRoutes from "./routes/metaRoutes.js";
+import qrShortLinkRoutes from "./routes/qrShortLinkRoutes.js";
 export const app = express();
 
 app.set("trust proxy", 1);
@@ -31,6 +32,7 @@ const __dirname = path.dirname(__filename);
 app.use("/downloads", express.static(path.join(__dirname, "../downloads")));
 app.use("/android/download", express.static(path.join(__dirname, "../android/download")));
 
+app.use("/q", qrShortLinkRoutes);
 app.use("/api/meta", metaRoutes);
 app.use("/api", apiRouter);
 app.use(notFoundHandler);

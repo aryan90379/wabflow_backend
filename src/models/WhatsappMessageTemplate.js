@@ -29,6 +29,12 @@ const whatsappMessageTemplateSchema = new mongoose.Schema(
     language: { type: String, default: "en_US" },
     body: { type: String, required: true, trim: true, maxlength: 1024 },
     footer: { type: String, default: "", trim: true, maxlength: 60 },
+    headerType: {
+      type: String,
+      enum: ["NONE", "IMAGE"],
+      default: "NONE",
+    },
+    headerImageUrl: { type: String, default: "", trim: true },
     buttons: { type: [templateButtonSchema], default: [] },
     status: {
       type: String,

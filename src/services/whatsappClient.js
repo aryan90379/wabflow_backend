@@ -158,6 +158,23 @@ export async function sendWhatsappTemplatePayload(
       language: {
         code: template.language || "en_US",
       },
+      ...(template.headerType === "IMAGE" && template.headerImageUrl
+        ? {
+            components: [
+              {
+                type: "header",
+                parameters: [
+                  {
+                    type: "image",
+                    image: {
+                      link: template.headerImageUrl,
+                    },
+                  },
+                ],
+              },
+            ],
+          }
+        : {}),
     },
   });
 }

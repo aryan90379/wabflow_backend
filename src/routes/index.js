@@ -111,6 +111,13 @@ import {
 import { generateBookingFlow } from "../controllers/metaFlowController.js";
 import { receiveWebhook, verifyWebhook } from "../controllers/webhookController.js";
 import { getTutorials, updateTutorials } from "../controllers/tutorialController.js";
+import {
+  createQrShortLink,
+  getQrShortLinkAnalytics,
+  listQrShortLinks,
+  resolvePublicQrShortLink,
+  updateQrShortLink,
+} from "../controllers/qrShortLinkController.js";
 
 import deviceRoutes from "./deviceRoutes.js";
 
@@ -135,6 +142,7 @@ apiRouter.delete("/auth/me", authMiddleware, asyncHandler(deleteAccount));
 apiRouter.get("/webhooks/whatsapp", verifyWebhook);
 apiRouter.post("/webhooks/whatsapp", receiveWebhook);
 
+apiRouter.get("/public/qr-links/:slug", asyncHandler(resolvePublicQrShortLink));
 
 // --- Tutorials ---
 apiRouter.get("/tutorials", authMiddleware, asyncHandler(getTutorials));
@@ -171,6 +179,11 @@ businessRouter.delete("/services/:serviceId", requirePermission("settings.edit")
 businessRouter.post("/uploads", requirePermission("settings.edit"), asyncHandler(uploadMedia));
 businessRouter.post("/services/:serviceId/images", requirePermission("settings.edit"), asyncHandler(uploadServiceImage));
 businessRouter.delete("/services/:serviceId/images", requirePermission("settings.edit"), asyncHandler(removeServiceImage));
+
+businessRouter.get("/qr-links", requirePermission("settings.view"), asyncHandler(listQrShortLinks));
+businessRouter.post("/qr-links", requirePermission("settings.edit"), asyncHandler(createQrShortLink));
+businessRouter.patch("/qr-links/:linkId", requirePermission("settings.edit"), asyncHandler(updateQrShortLink));
+businessRouter.get("/qr-links/:linkId/analytics", requirePermission("settings.view"), asyncHandler(getQrShortLinkAnalytics));
 
 businessRouter.get("/automation-rules", requirePermission("settings.view"), asyncHandler(listRules));
 businessRouter.post("/automation-rules", requirePermission("settings.edit"), asyncHandler(createRule));

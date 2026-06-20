@@ -17,3 +17,4 @@ export { FollowUpTask } from "./FollowUpTask.js";
 export { HandoffRequest } from "./HandoffRequest.js";
 export { BotDecisionLog } from "./BotDecisionLog.js";
 export { Notification } from "./Notification.js";
+export { QrShortLink } from "./QrShortLink.js";

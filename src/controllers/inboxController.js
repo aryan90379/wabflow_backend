@@ -17,6 +17,16 @@ import { sendApprovedTemplateMessage } from "../services/templateMessageService.
 
 const GRAPH_BASE = `https://graph.facebook.com/${env.metaGraphVersion || "v21.0"}`;
 
+const buildMetaUrl = (path, params = {}) => {
+  const url = new URL(`${GRAPH_BASE}${path.startsWith("/") ? path : `/${path}`}`);
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== "") {
+      url.searchParams.set(key, String(value));
+    }
+  }
+  return url.toString();
+};
+
 async function readMetaJson(response, label) {
   const raw = await response.text();
   let data = {};
@@ -75,13 +85,97 @@ function sanitizeButtons(buttons = []) {
     .slice(0, 10);
 }
 
-function buildMetaTemplateComponents({ body, footer, buttons }) {
-  const components = [
-    {
-      type: "BODY",
-      text: body,
-    },
-  ];
+function imageContentTypeFromUrl(url = "") {
+  const lower = String(url || "").toLowerCase();
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".webp")) return "image/webp";
+  return "image/jpeg";
+}
+
+async function createMetaUploadSession({ accessToken, fileLength, fileType }) {
+  if (!env.metaAppId) {
+    throw new Error("META_APP_ID is required to upload WhatsApp template images.");
+  }
+
+  return readMetaJson(
+    await fetch(
+      buildMetaUrl(`/${env.metaAppId}/uploads`, {
+        file_length: fileLength,
+        file_type: fileType,
+        access_token: accessToken,
+      }),
+      { method: "POST" }
+    ),
+    "Create Meta upload session"
+  );
+}
+
+async function uploadMetaFileBytes({ accessToken, uploadSessionId, buffer }) {
+  const result = await readMetaJson(
+    await fetch(buildMetaUrl(`/${uploadSessionId}`), {
+      method: "POST",
+      headers: {
+        Authorization: `OAuth ${accessToken}`,
+        file_offset: "0",
+        "Content-Type": "application/octet-stream",
+      },
+      body: buffer,
+    }),
+    "Upload Meta template image"
+  );
+
+  if (!result.h) {
+    throw new Error("Meta upload did not return an image handle.");
+  }
+
+  return result.h;
+}
+
+async function uploadTemplateHeaderImageHandle(imageUrl, accessToken) {
+  const imageResponse = await fetch(imageUrl);
+  if (!imageResponse.ok) {
+    throw new Error(`Could not fetch template image URL. Status ${imageResponse.status}`);
+  }
+
+  const contentType =
+    imageResponse.headers.get("content-type")?.split(";")[0]?.trim() ||
+    imageContentTypeFromUrl(imageUrl);
+
+  if (!/^image\/(jpeg|jpg|png|webp)$/i.test(contentType)) {
+    throw new Error(`Template image must be a JPEG, PNG, or WebP image. Got ${contentType}.`);
+  }
+
+  const buffer = Buffer.from(await imageResponse.arrayBuffer());
+  const uploadSession = await createMetaUploadSession({
+    accessToken,
+    fileLength: buffer.length,
+    fileType: contentType.replace("image/jpg", "image/jpeg"),
+  });
+
+  return uploadMetaFileBytes({
+    accessToken,
+    uploadSessionId: uploadSession.id,
+    buffer,
+  });
+}
+
+function buildMetaTemplateComponents({ body, footer, buttons, headerType, headerImageHandle }) {
+  const components = [];
+
+  if (headerType === "IMAGE" && headerImageHandle) {
+    components.push({
+      type: "HEADER",
+      format: "IMAGE",
+      example: {
+        header_handle: [headerImageHandle],
+      },
+    });
+  }
+
+  components.push({
+    type: "BODY",
+    text: body,
+  });
 
   if (footer) {
     components.push({
@@ -104,11 +198,19 @@ function buildMetaTemplateComponents({ body, footer, buttons }) {
 }
 
 function parseMetaTemplateComponents(components = []) {
+  const headerComponent = components.find((component) => component.type === "HEADER");
   const bodyComponent = components.find((component) => component.type === "BODY");
   const footerComponent = components.find((component) => component.type === "FOOTER");
   const buttonComponent = components.find((component) => component.type === "BUTTONS");
+  const headerType = headerComponent?.format === "IMAGE" ? "IMAGE" : "NONE";
 
   return {
+    headerType,
+    headerImageUrl: String(
+      headerComponent?.example?.header_handle?.[0] ||
+        headerComponent?.example?.header_url?.[0] ||
+        ""
+    ).trim(),
     body: String(bodyComponent?.text || "").trim(),
     footer: String(footerComponent?.text || "").trim(),
     buttons: (buttonComponent?.buttons || [])
@@ -151,6 +253,8 @@ async function syncBusinessTemplates(businessId) {
               language: item.language || "en_US",
               status: normalizeTemplateStatus(item.status),
               rejectionReason: item.rejected_reason || "",
+              headerType: parsed.headerType,
+              headerImageUrl: parsed.headerImageUrl,
               body: parsed.body || "Synced from Meta.",
               ...(parsed.footer ? { footer: parsed.footer } : {}),
               ...(parsed.buttons.length ? { buttons: parsed.buttons } : {}),
@@ -241,13 +345,25 @@ export async function createWhatsappMessageTemplate(req, res) {
   const body = String(req.body.body || "").trim();
   const footer = String(req.body.footer || "").trim().slice(0, 60);
   const buttons = sanitizeButtons(req.body.buttons);
+  const headerType = req.body.headerType === "IMAGE" ? "IMAGE" : "NONE";
+  const headerImageUrl = String(req.body.headerImageUrl || "").trim();
 
   if (!body) {
     return res.status(400).json({ success: false, error: "Template message body is required." });
   }
 
+  if (headerType === "IMAGE" && !/^https:\/\/\S+/i.test(headerImageUrl)) {
+    return res.status(400).json({
+      success: false,
+      error: "Image templates need a public HTTPS image URL.",
+    });
+  }
+
   const { accessToken } = await getWhatsappAccountWithToken(account._id);
-  const components = buildMetaTemplateComponents({ body, footer, buttons });
+  const headerImageHandle = headerType === "IMAGE"
+    ? await uploadTemplateHeaderImageHandle(headerImageUrl, accessToken)
+    : "";
+  const components = buildMetaTemplateComponents({ body, footer, buttons, headerType, headerImageHandle });
 
   const result = await readMetaJson(
     await fetch(`${GRAPH_BASE}/${account.wabaId}/message_templates`, {
@@ -278,6 +394,8 @@ export async function createWhatsappMessageTemplate(req, res) {
         language: req.body.language || "en_US",
         body,
         footer,
+        headerType,
+        headerImageUrl,
         buttons,
         status: normalizeTemplateStatus(result.status || "pending"),
         rejectionReason: "",
