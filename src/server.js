@@ -5,6 +5,7 @@ import { startFollowUpWorker } from "./services/followUpWorker.js";
 import { initSocket } from "./services/socketService.js";
 import { initRawChatSocket } from "./services/rawChatSocketService.js";
 import { notificationQueue, notificationWorker } from "./workers/notificationWorker.js";
+import { broadcastQueue, broadcastWorker } from "./workers/broadcastWorker.js";
 
 async function start() {
   await connectDatabase();
@@ -25,6 +26,8 @@ async function start() {
     // Gracefully shut down BullMQ
     await notificationWorker.close();
     await notificationQueue.close();
+    await broadcastWorker.close();
+    await broadcastQueue.close();
 
     server.close(() => process.exit(0));
   };

@@ -78,6 +78,13 @@ import {
   assignConversation,
 } from "../controllers/inboxController.js";
 import {
+  cancelBroadcast,
+  createBroadcast,
+  getBroadcast,
+  listBroadcastRecipients,
+  listBroadcasts,
+} from "../controllers/broadcastController.js";
+import {
   createFollowUp,
   getBooking,
   getLead,
@@ -197,6 +204,11 @@ businessRouter.get("/conversations", requirePermission("inbox.view"), asyncHandl
 businessRouter.get("/message-templates", requirePermission("inbox.view"), asyncHandler(listWhatsappMessageTemplates));
 businessRouter.post("/message-templates", requirePermission("inbox.reply"), asyncHandler(createWhatsappMessageTemplate));
 businessRouter.post("/message-templates/:templateId/send", requirePermission("inbox.reply"), asyncHandler(sendWhatsappMessageTemplate));
+businessRouter.get("/broadcasts", requirePermission("inbox.view"), asyncHandler(listBroadcasts));
+businessRouter.post("/broadcasts", requirePermission("inbox.reply"), asyncHandler(createBroadcast));
+businessRouter.get("/broadcasts/:broadcastId", requirePermission("inbox.view"), asyncHandler(getBroadcast));
+businessRouter.get("/broadcasts/:broadcastId/recipients", requirePermission("inbox.view"), asyncHandler(listBroadcastRecipients));
+businessRouter.post("/broadcasts/:broadcastId/cancel", requirePermission("inbox.reply"), asyncHandler(cancelBroadcast));
 businessRouter.get("/conversations/:conversationId", requirePermission("inbox.view"), asyncHandler(getConversation));
 businessRouter.get("/conversations/:conversationId/messages", requirePermission("inbox.view"), asyncHandler(listMessages));
 businessRouter.post("/conversations/:conversationId/messages", requirePermission("inbox.reply"), asyncHandler(sendHumanMessage));

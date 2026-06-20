@@ -13,6 +13,7 @@ import { sendAndSaveMessage } from "../services/conversationService.js";
 import { getWhatsappAccountWithToken, sendWhatsappTemplatePayload } from "../services/whatsappClient.js";
 import { broadcastToBusiness } from "../services/socketService.js";
 import { broadcastRawToBusiness } from "../services/rawChatSocketService.js";
+import { sendApprovedTemplateMessage } from "../services/templateMessageService.js";
 
 const GRAPH_BASE = `https://graph.facebook.com/${env.metaGraphVersion || "v21.0"}`;
 
@@ -316,88 +317,21 @@ export async function sendWhatsappMessageTemplate(req, res) {
     return res.status(400).json({ success: false, error: "Enter a valid WhatsApp phone number with country code." });
   }
 
-  const account = await WhatsappAccount.findOne({
-    _id: freshTemplate.whatsappAccountId,
-    businessId: req.business._id,
-    status: "active",
-  });
-
-  if (!account) {
-    return res.status(400).json({ success: false, error: "Active WhatsApp account for this template is unavailable." });
-  }
-
-  const { contact, conversation } = await findOrCreateContactAndConversation({
-    businessId: req.business._id,
-    whatsappAccountId: account._id,
-    waId: phone,
-    phone,
-    profileName: req.body.customerName || "",
-  });
-
-  const temporaryMessage = await Message.create({
-    businessId: req.business._id,
-    conversationId: conversation._id,
-    contactId: contact._id,
-    whatsappAccountId: account._id,
-    direction: "outbound",
-    senderType: "bot",
-    type: freshTemplate.buttons?.length ? "button" : "text",
-    text: freshTemplate.body,
-    status: "queued",
-  });
-
   try {
-    const result = await sendWhatsappTemplatePayload(account._id, phone, freshTemplate);
-    temporaryMessage.whatsappMessageId = result?.messages?.[0]?.id || null;
-    temporaryMessage.status = "sent";
-    await temporaryMessage.save();
-
-    await Conversation.updateOne(
-      { _id: conversation._id },
-      {
-        $set: {
-          status: "open",
-          lastMessageAt: temporaryMessage.createdAt,
-          lastMessage: {
-            text: temporaryMessage.text,
-            type: temporaryMessage.type,
-            direction: "outbound",
-            at: temporaryMessage.createdAt,
-          },
-        },
-      }
-    );
-
-    const savedConversation = await Conversation.findById(conversation._id)
-      .populate("contactId", "name phone waId tags leadStage lastMessageAt")
-      .populate("whatsappAccountId", "displayPhoneNumber verifiedName phoneNumberId")
-      .lean();
-    const conversationPayload = {
-      ...savedConversation,
-      contact: savedConversation?.contactId && typeof savedConversation.contactId === "object"
-        ? savedConversation.contactId
-        : null,
-      whatsappAccount: savedConversation?.whatsappAccountId && typeof savedConversation.whatsappAccountId === "object"
-        ? savedConversation.whatsappAccountId
-        : null,
-    };
-
-    const messagePayload = temporaryMessage.toObject();
-    broadcastToBusiness(req.business._id.toString(), "new_message", messagePayload);
-    broadcastRawToBusiness(req.business._id.toString(), "new_message", messagePayload);
-    broadcastToBusiness(req.business._id.toString(), "conversation_updated", conversationPayload);
-    broadcastRawToBusiness(req.business._id.toString(), "conversation_updated", conversationPayload);
+    const { message, conversation } = await sendApprovedTemplateMessage({
+      businessId: req.business._id,
+      templateId: freshTemplate._id,
+      phone,
+      customerName: req.body.customerName || "",
+    });
 
     return res.status(201).json({
       success: true,
-      message: temporaryMessage,
-      conversation: conversationPayload,
-      data: { message: temporaryMessage, conversation: conversationPayload },
+      message,
+      conversation,
+      data: { message, conversation },
     });
   } catch (error) {
-    temporaryMessage.status = "failed";
-    temporaryMessage.error = error.meta || { message: error.message };
-    await temporaryMessage.save();
     throw error;
   }
 }
