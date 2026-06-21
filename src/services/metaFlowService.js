@@ -286,6 +286,7 @@ export function generateBookingFlowJson(config) {
               type: "TextInput",
               name: "booking_time",
               label: "Preferred Time (HH:MM AM/PM)",
+              "helper-text": "Example: 10:30 AM or 14:15",
               required: true,
             }]),
             ...(config.collectFields?.notes ? [{

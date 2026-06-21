@@ -84,6 +84,36 @@ function serviceToFlowOption(service) {
   };
 }
 
+function normalizeTime(input) {
+  if (!input) return "";
+  const str = String(input).trim().toLowerCase();
+  
+  // Example 1: 14:30 or 02:15 am
+  let match = str.match(/^(\d{1,2})[.:\s]?(\d{2})?\s*(am|pm|a\.m\.|p\.m\.)?$/i);
+  if (!match) {
+    // Example 2: 3pm, 3 pm, 1430
+    match = str.match(/^(\d{1,2})(?:[.:\s]?(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)?$/i);
+  }
+  
+  if (match) {
+    let hour = parseInt(match[1], 10);
+    let minute = parseInt(match[2] || "0", 10);
+    const ampm = match[3] ? match[3].replace(/\./g, "").toLowerCase() : null;
+
+    if (ampm === "pm" && hour < 12) hour += 12;
+    if (ampm === "am" && hour === 12) hour = 0;
+    
+    // Check bounds
+    if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
+      const suffix = hour >= 12 ? "PM" : "AM";
+      const hour12 = hour % 12 || 12;
+      return `${hour12}:${String(minute).padStart(2, "0")} ${suffix}`;
+    }
+  }
+  
+  return String(input).trim();
+}
+
 async function handleBookingFlowReply({ business, account, contact, conversation, inboundMessage, event }) {
   if (event.type !== "flow_reply") return false;
 
@@ -118,7 +148,7 @@ async function handleBookingFlowReply({ business, account, contact, conversation
     customerName: responseJson.customerName || contact.name || "",
     customerPhone: responseJson.customerPhone || contact.phone || contact.waId,
     startDate: responseJson.startDate,
-    startTime: responseJson.startTime,
+    startTime: normalizeTime(responseJson.startTime),
     notes: responseJson.notes || "",
     metadata,
   });
@@ -371,9 +401,49 @@ function textLooksLikeRoomListRequest(text = "") {
   return /\b(view|show|list|available|see)\b/.test(normalized) && /\b(room|rooms|suite|suites)\b/.test(normalized);
 }
 
+function textLooksLikeAppointmentListRequest(text = "") {
+  const normalized = String(text || "").toLowerCase();
+  return /\b(my|view|show|see|list)\b/.test(normalized) && /\b(appointment|appointments|booking|bookings|visit|visits)\b/.test(normalized);
+}
+
 function textLooksLikeBookingRequest(text = "") {
   const normalized = String(text || "").toLowerCase();
   return /\b(book|booking|appointment|visit|reserve|schedule)\b/.test(normalized);
+}
+
+async function sendAppointmentList({ business, account, contact, conversation, message = "Here are your upcoming appointments:" }) {
+  const appointments = await Booking.find({
+    businessId: business._id,
+    contactId: contact._id,
+    type: "appointment",
+    status: { $in: ["requested", "confirmed", "scheduled"] }
+  }).sort({ createdAt: -1 }).limit(5);
+
+  if (!appointments.length) {
+    const response = { type: "text", text: "You don't have any upcoming appointments right now." };
+    await sendAndSaveMessage({ account, contact, conversation, response, senderType: "bot" });
+    return { response, appointments };
+  }
+
+  let text = message + "\n";
+  for (const appt of appointments) {
+    text += `\n📅 Date: ${appt.startDate || 'TBD'} at ${appt.startTime || 'TBD'}`;
+    if (appt.serviceItemId) {
+      const item = await ServiceItem.findById(appt.serviceItemId);
+      if (item) text += `\n🩺 Reason: ${item.name}`;
+    } else if (appt.metadata?.get("appointmentReason")) {
+      text += `\n🩺 Reason: ${appt.metadata.get("appointmentReason")}`;
+    }
+    const statusLabel = appt.status === "requested" ? "PENDING" : appt.status.toUpperCase();
+    text += `\n📌 Status: ${statusLabel}\n`;
+  }
+
+  const response = { type: "text", text: text.trim() };
+  await sendAndSaveMessage({ account, contact, conversation, response, senderType: "bot" });
+  
+  conversation.botState.updatedAt = new Date();
+  await conversation.save();
+  return { response, appointments };
 }
 
 async function sendRoomList({ business, account, contact, conversation, message = "Here are our available rooms. Tap Select under a room to continue." }) {
@@ -743,6 +813,28 @@ export async function processIncomingMessage(event) {
         confidence,
         actionTaken: "ignored",
         metadata: { reason: "human_handoff_active" },
+      });
+      return;
+    }
+
+    if (event.selectionId === "sys_view_appointments" || (!event.selectionId && textLooksLikeAppointmentListRequest(event.text || ""))) {
+      const { response } = await sendAppointmentList({
+        business,
+        account,
+        contact,
+        conversation,
+        message: "Here are your upcoming appointments:",
+      });
+
+      await writeDecision({
+        businessId: business._id,
+        conversationId: conversation._id,
+        messageId: inboundMessage._id,
+        intent: "service_query",
+        confidence: 1,
+        actionTaken: "sent_reply",
+        reply: response.text,
+        metadata: { appointmentList: true },
       });
       return;
     }

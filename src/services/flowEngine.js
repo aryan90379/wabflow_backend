@@ -860,14 +860,23 @@ export async function continueFlowV2({ flow, business, account, contact, convers
           description: b.description,
       }));
 
+      const isMedical = ["doctor", "clinic", "hospital"].includes(String(business.businessType || "").toLowerCase());
+      if (isMedical && step.id === flow.entryStepId) {
+        responseOptions.push({
+          id: "sys_view_appointments",
+          title: "My Appointments",
+          description: "View your upcoming visits"
+        });
+      }
+
       let responseText = config.text;
       if (step.id === flow.entryStepId && responseText && !responseText.toLowerCase().includes('write hi to reset the flow')) {
         responseText += '\n\n(write hi to reset the flow)';
       }
 
-      let responseType = config.messageType || (buttons.length ? "buttons" : "text");
+      let responseType = config.messageType || (responseOptions.length ? "buttons" : "text");
 
-      if (buttons.length > 3 && responseType !== "list") {
+      if (responseOptions.length > 3 && responseType !== "list") {
         const chunks = [];
         for (let j = 0; j < responseOptions.length; j += 3) {
           chunks.push(responseOptions.slice(j, j + 3));
