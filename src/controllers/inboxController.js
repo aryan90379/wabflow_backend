@@ -499,6 +499,19 @@ export async function sendHumanMessage(req, res) {
   const conversation = await loadConversation(req);
   if (!conversation) return res.status(404).json({ success: false, error: "Conversation not found." });
 
+  const clientMessageId = req.headers["idempotency-key"] || req.body.clientMessageId;
+
+  if (clientMessageId) {
+    const existingMessage = await Message.findOne({
+      businessId: req.business._id,
+      conversationId: conversation._id,
+      clientMessageId: clientMessageId,
+    });
+    if (existingMessage) {
+      return res.status(200).json({ success: true, message: existingMessage, data: existingMessage });
+    }
+  }
+
   const type = ["text", "image"].includes(req.body.type) ? req.body.type : "text";
   const text = String(req.body.text || "").trim();
   const mediaUrl = String(req.body.mediaUrl || "").trim();
@@ -551,6 +564,7 @@ export async function sendHumanMessage(req, res) {
     sentByMemberId,
     sentByName,
     sentByAvatarUrl,
+    clientMessageId,
   });
 
   conversation.status = "human_needed";
@@ -671,3 +685,77 @@ export async function assignConversation(req, res) {
 
   return res.json({ success: true, conversation, data: conversation });
 }
+
+export async function syncConversations(req, res) {
+  const businessId = req.business._id;
+  const whatsappAccountId = req.query.whatsappAccountId;
+  const afterCursor = req.query.afterCursor; // Expect an ISO date string
+  const limit = Math.min(100, Math.max(1, Number(req.query.limit || 50)));
+
+  const filter = { businessId };
+  if (whatsappAccountId) {
+    filter.whatsappAccountId = whatsappAccountId;
+  }
+  if (afterCursor) {
+    const afterDate = new Date(afterCursor);
+    if (!isNaN(afterDate.getTime())) {
+      filter.updatedAt = { $gt: afterDate };
+    }
+  }
+
+  const items = await Conversation.find(filter)
+    .populate("contactId", "name phone waId tags leadStage lastMessageAt")
+    .populate("whatsappAccountId", "displayPhoneNumber verifiedName phoneNumberId")
+    .sort({ updatedAt: 1 })
+    .limit(limit)
+    .lean();
+
+  const conversations = items.map((conversation) => ({
+    ...conversation,
+    contact: conversation.contactId && typeof conversation.contactId === "object"
+      ? conversation.contactId
+      : null,
+    whatsappAccount: conversation.whatsappAccountId && typeof conversation.whatsappAccountId === "object"
+      ? conversation.whatsappAccountId
+      : null,
+  }));
+
+  const hasMore = items.length === limit;
+  const nextCursor = items.length > 0 ? items[items.length - 1].updatedAt.toISOString() : afterCursor || null;
+
+  return res.json({
+    success: true,
+    conversations,
+    deletedConversationIds: [], // We'd need a tombstone table to track hard deletes if any.
+    nextCursor,
+    hasMore,
+    serverTime: new Date().toISOString(),
+  });
+}
+
+export async function syncMessages(req, res) {
+  const conversation = await loadConversation(req);
+  if (!conversation) return res.status(404).json({ success: false, error: "Conversation not found." });
+
+  const afterSequence = Number(req.query.afterSequence) || 0;
+  const limit = Math.min(100, Math.max(1, Number(req.query.limit || 50)));
+
+  const messages = await Message.find({
+    conversationId: conversation._id,
+    serverSequence: { $gt: afterSequence },
+  })
+    .sort({ serverSequence: 1 })
+    .limit(limit);
+
+  const hasMore = messages.length === limit;
+  const nextSequence = messages.length > 0 ? messages[messages.length - 1].serverSequence : afterSequence;
+
+  return res.json({
+    success: true,
+    messages,
+    nextSequence,
+    hasMore,
+    serverTime: new Date().toISOString(),
+  });
+}
+

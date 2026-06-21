@@ -110,6 +110,15 @@ export async function saveInboundMessage({ account, contact, conversation, event
       rawPayload: event.raw,
       createdAt: event.timestamp || new Date(),
     });
+    
+    // Atomically increment and assign server sequence
+    const updatedConv = await Conversation.findOneAndUpdate(
+      { _id: conversation._id },
+      { $inc: { lastServerSequence: 1 } },
+      { new: true }
+    );
+    message.serverSequence = updatedConv.lastServerSequence;
+    await message.save();
   } catch (error) {
     if (error?.code === 11000) return null;
     throw error;
@@ -182,6 +191,7 @@ export async function sendAndSaveMessage({
   sentByMemberId = null,
   sentByName = "",
   sentByAvatarUrl = "",
+  clientMessageId = null,
 }) {
   if (response?.type === "buttons" && hasMapUrl(response.text) && !response.mediaUrl) {
     const textMessage = await sendAndSaveMessage({
@@ -232,7 +242,17 @@ export async function sendAndSaveMessage({
     } : undefined,
     mediaUrl: response.mediaUrl || "",
     status: "queued",
+    clientMessageId: clientMessageId || undefined,
   });
+
+  // Atomically increment and assign server sequence
+  const updatedConv = await Conversation.findOneAndUpdate(
+    { _id: conversation._id },
+    { $inc: { lastServerSequence: 1 } },
+    { new: true }
+  );
+  temporaryMessage.serverSequence = updatedConv.lastServerSequence;
+  await temporaryMessage.save();
 
   try {
     const result = await sendConfiguredWhatsappResponse(account._id, contact.waId, response);

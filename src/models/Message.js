@@ -39,6 +39,8 @@ const messageSchema = new mongoose.Schema(
       caption: { type: String, default: "" },
     },
     mediaUrl: { type: String, default: "" },
+    clientMessageId: { type: String, sparse: true },
+    serverSequence: { type: Number, index: true },
     whatsappMessageId: { type: String, sparse: true, unique: true, index: true },
     status: {
       type: String,
@@ -54,6 +56,8 @@ const messageSchema = new mongoose.Schema(
 );
 
 messageSchema.index({ conversationId: 1, createdAt: 1 });
+messageSchema.index({ conversationId: 1, serverSequence: 1 }, { unique: true, sparse: true });
+messageSchema.index({ businessId: 1, whatsappAccountId: 1, clientMessageId: 1 }, { unique: true, sparse: true });
 messageSchema.index({ businessId: 1, createdAt: -1 });
 
 export const Message = mongoose.models.Message || mongoose.model("Message", messageSchema);

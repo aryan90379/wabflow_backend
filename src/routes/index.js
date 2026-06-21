@@ -76,6 +76,8 @@ import {
   sendHumanMessage,
   updateConversationStatus,
   assignConversation,
+  syncConversations,
+  syncMessages,
 } from "../controllers/inboxController.js";
 import {
   cancelBroadcast,
@@ -214,6 +216,7 @@ businessRouter.post("/flows/generate-booking", requirePermission("flows.create")
 businessRouter.post("/flows/:flowId/archive", requirePermission("flows.edit"), asyncHandler(archiveFlow));
 
 businessRouter.get("/conversations", requirePermission("inbox.view"), asyncHandler(listConversations));
+businessRouter.get("/conversations/sync", requirePermission("inbox.view"), asyncHandler(syncConversations));
 businessRouter.get("/message-templates", requirePermission("inbox.view"), asyncHandler(listWhatsappMessageTemplates));
 businessRouter.post("/message-templates", requirePermission("inbox.reply"), asyncHandler(createWhatsappMessageTemplate));
 businessRouter.post("/message-templates/:templateId/send", requirePermission("inbox.reply"), asyncHandler(sendWhatsappMessageTemplate));
@@ -224,6 +227,7 @@ businessRouter.get("/broadcasts/:broadcastId/recipients", requirePermission("inb
 businessRouter.post("/broadcasts/:broadcastId/cancel", requirePermission("inbox.reply"), asyncHandler(cancelBroadcast));
 businessRouter.get("/conversations/:conversationId", requirePermission("inbox.view"), asyncHandler(getConversation));
 businessRouter.get("/conversations/:conversationId/messages", requirePermission("inbox.view"), asyncHandler(listMessages));
+businessRouter.get("/conversations/:conversationId/messages/sync", requirePermission("inbox.view"), asyncHandler(syncMessages));
 businessRouter.post("/conversations/:conversationId/messages", requirePermission("inbox.reply"), asyncHandler(sendHumanMessage));
 businessRouter.patch("/conversations/:conversationId/read", requirePermission("inbox.view"), asyncHandler(markConversationRead));
 businessRouter.patch("/conversations/:conversationId/status", requirePermission("inbox.manage"), asyncHandler(updateConversationStatus));

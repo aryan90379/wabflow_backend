@@ -65,6 +65,7 @@ const conversationSchema = new mongoose.Schema(
     lastMessage: { type: lastMessageSchema, default: () => ({}) },
     unreadCount: { type: Number, default: 0 },
     lastMessageAt: { type: Date, default: Date.now, index: true },
+    lastServerSequence: { type: Number, default: 0 },
     botState: { type: botStateSchema, default: () => ({}) },
   },
   { timestamps: true }
