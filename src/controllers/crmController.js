@@ -198,6 +198,19 @@ export async function updateBooking(req, res) {
   return res.json({ success: true, booking, data: booking });
 }
 
+export async function createBooking(req, res) {
+  const allowed = ["serviceItemId", "contactId", "conversationId", "type", "status", "startDate", "endDate", "startTime", "guests", "customerName", "customerPhone", "notes", "metadata"];
+  const data = Object.fromEntries(Object.entries(req.body).filter(([key]) => allowed.includes(key)));
+  
+  const booking = await Booking.create({
+    ...data,
+    businessId: req.business._id,
+  });
+  
+  return res.status(201).json({ success: true, booking, data: booking });
+}
+
+
 export async function listFollowUps(req, res) {
   const result = await listModel(FollowUpTask, req, { scheduledAt: 1 });
   return res.json({ success: true, followUps: result.items, data: result.items, pagination: result.pagination, ...result.pagination });

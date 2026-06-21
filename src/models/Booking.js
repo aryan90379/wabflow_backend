@@ -3,8 +3,8 @@ import mongoose from "mongoose";
 const bookingSchema = new mongoose.Schema(
   {
     businessId: { type: mongoose.Schema.Types.ObjectId, ref: "Business", required: true, index: true },
-    contactId: { type: mongoose.Schema.Types.ObjectId, ref: "Contact", required: true, index: true },
-    conversationId: { type: mongoose.Schema.Types.ObjectId, ref: "Conversation", required: true, index: true },
+    contactId: { type: mongoose.Schema.Types.ObjectId, ref: "Contact", index: true },
+    conversationId: { type: mongoose.Schema.Types.ObjectId, ref: "Conversation", index: true },
     serviceItemId: { type: mongoose.Schema.Types.ObjectId, ref: "ServiceItem", default: null },
     type: {
       type: String,

@@ -90,6 +90,7 @@ import {
 import {
   createFollowUp,
   getBooking,
+  createBooking,
   getLead,
   listBookings,
   listDecisionLogs,
@@ -239,6 +240,7 @@ businessRouter.get("/leads", requirePermission("inbox.view"), asyncHandler(listL
 businessRouter.get("/leads/:leadId", requirePermission("inbox.view"), asyncHandler(getLead));
 businessRouter.patch("/leads/:leadId", requirePermission("inbox.manage"), asyncHandler(updateLead));
 businessRouter.get("/bookings", requirePermission("inbox.view"), asyncHandler(listBookings));
+businessRouter.post("/bookings", requirePermission("inbox.manage"), asyncHandler(createBooking));
 businessRouter.get("/bookings/:bookingId", requirePermission("inbox.view"), asyncHandler(getBooking));
 businessRouter.patch("/bookings/:bookingId", requirePermission("inbox.manage"), asyncHandler(updateBooking));
 businessRouter.get("/follow-ups", requirePermission("inbox.view"), asyncHandler(listFollowUps));
