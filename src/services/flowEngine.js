@@ -464,11 +464,23 @@ async function processWaitingInputV2(flow, context) {
   if (awaiting.fieldKey === "meta_flow_response" && context.event.type === "flow_reply") {
     const data = context.event.media?.responseJson || {};
     const booking = await getOrCreateBooking(context);
+    const rawServiceItemId = data.serviceItemId;
+    const serviceItemId = mongoose.isValidObjectId(rawServiceItemId) ? rawServiceItemId : null;
     if (data.customerName) booking.customerName = data.customerName;
     if (data.customerPhone) booking.customerPhone = data.customerPhone;
     if (data.startDate) booking.startDate = data.startDate;
     if (data.startTime) booking.startTime = data.startTime;
     if (data.notes) booking.notes = data.notes;
+    if (serviceItemId) {
+      booking.serviceItemId = serviceItemId;
+      const service = await ServiceItem.findOne({ _id: serviceItemId, businessId: context.business._id });
+      if (service) {
+        booking.type = service.type === "room" ? "room_booking" : "appointment";
+        booking.metadata.set(service.type === "room" ? "roomType" : "appointmentReason", service.name);
+      }
+    } else if (rawServiceItemId) {
+      booking.metadata.set("appointmentReason", String(data.appointmentReason || rawServiceItemId));
+    }
     await booking.save();
     
     context.conversation.botState.awaitingInput = null;

@@ -65,7 +65,22 @@ function getBookingFlowCopy(business = {}, roomName = "") {
 
   return {
     buttonText: "Book Appointment",
-    text: "Please tap the button below to complete your booking.",
+    text: "Tap below to book an appointment.",
+  };
+}
+
+function isMedicalBusiness(business = {}) {
+  return ["doctor", "clinic", "hospital"].includes(String(business.businessType || "").toLowerCase());
+}
+
+function serviceToFlowOption(service) {
+  return {
+    id: String(service._id || service.id),
+    name: service.name,
+    description: service.description || "",
+    imageUrl: service.images?.[0] || "",
+    price: service.price,
+    currency: service.currency || "INR",
   };
 }
 
@@ -142,7 +157,27 @@ export async function handleSendBookingMetaFlow({
     selectedRoomName = selectedRoom?.name || "";
   }
 
-  if (!(resolvedBookingConfig.rooms || []).length) {
+  if (isMedicalBusiness(business)) {
+    const services = await ServiceItem.find({
+      businessId: business._id,
+      type: "service",
+      active: { $ne: false },
+    }).limit(10).lean();
+
+    resolvedBookingConfig.rooms = services.map(serviceToFlowOption);
+    resolvedBookingConfig.roomSelection = true;
+    resolvedBookingConfig.otherOption = resolvedBookingConfig.otherOption !== false;
+    resolvedBookingConfig.selectionLabel = resolvedBookingConfig.selectionLabel || "What do you want the appointment for?";
+    resolvedBookingConfig.otherOptionLabel = resolvedBookingConfig.otherOptionLabel || "Other";
+    resolvedBookingConfig.collectFields = {
+      name: true,
+      phone: true,
+      notes: true,
+      ...(resolvedBookingConfig.collectFields || {}),
+    };
+    resolvedBookingConfig.notesLabel = resolvedBookingConfig.notesLabel || "Describe your problem";
+    resolvedBookingConfig.notesRequired = resolvedBookingConfig.notesRequired !== false;
+  } else if (!(resolvedBookingConfig.rooms || []).length) {
     if (includeSelectedRoomInFlow && selectedRoom) {
       resolvedBookingConfig.rooms = [{
         id: String(selectedRoom._id),
@@ -633,12 +668,17 @@ export async function processIncomingMessage(event) {
       const { flowConfigId } = responseJson;
 
       if (flowConfigId === "booking") {
-        const serviceItemId = responseJson.serviceItemId;
-        let roomName = "";
+        const rawServiceItemId = responseJson.serviceItemId;
+        const serviceItemId = /^[a-f\d]{24}$/i.test(String(rawServiceItemId || "")) ? rawServiceItemId : null;
+        let selectedItemName = "";
+        let selectedItemType = "";
         
         if (serviceItemId) {
-          const room = await ServiceItem.findById(serviceItemId);
-          if (room) roomName = room.name;
+          const item = await ServiceItem.findById(serviceItemId);
+          if (item) {
+            selectedItemName = item.name;
+            selectedItemType = item.type;
+          }
         }
 
         const booking = await Booking.create({
@@ -646,14 +686,17 @@ export async function processIncomingMessage(event) {
           contactId: contact._id,
           conversationId: conversation._id,
           serviceItemId: serviceItemId || null,
-          type: serviceItemId ? "room_booking" : "appointment",
+          type: selectedItemType === "room" ? "room_booking" : "appointment",
           status: "requested",
           customerName: responseJson.customerName || contact.name || "",
           customerPhone: responseJson.customerPhone || contact.phone || contact.waId,
           startDate: responseJson.startDate,
           startTime: responseJson.startTime,
           notes: responseJson.notes || "",
-          metadata: new Map(roomName ? [["roomType", roomName]] : []),
+          metadata: new Map([
+            ...(selectedItemName ? [[selectedItemType === "room" ? "roomType" : "appointmentReason", selectedItemName]] : []),
+            ...(!serviceItemId && rawServiceItemId ? [["appointmentReason", String(responseJson.appointmentReason || rawServiceItemId)]] : []),
+          ]),
         });
 
         await sendAndSaveMessage({

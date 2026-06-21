@@ -32,6 +32,7 @@ const businessSchema = new mongoose.Schema(
       botEnabled: { type: Boolean, default: true },
       aiEnabled: { type: Boolean, default: false },
       handoffEnabled: { type: Boolean, default: true },
+      onboardingResetRequired: { type: Boolean, default: false },
       language: {
         type: String,
         enum: ["english", "hindi", "hinglish"],
@@ -46,6 +47,7 @@ const businessSchema = new mongoose.Schema(
         default: "I am connecting you with a team member. They will reply here shortly.",
       },
     },
+    metadata: { type: Map, of: mongoose.Schema.Types.Mixed, default: {} },
     integrations: {
       whatsappConnected: { type: Boolean, default: false },
     },

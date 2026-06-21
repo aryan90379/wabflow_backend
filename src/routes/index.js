@@ -34,6 +34,7 @@ import {
   createBusiness,
   getBusiness,
   listMyBusinesses,
+  resetBusinessForOnboarding,
   updateBusiness,
 } from "../controllers/businessController.js";
 import {
@@ -163,6 +164,7 @@ businessRouter.use(requireBusinessAccess);
 
 businessRouter.get("/", asyncHandler(getBusiness));
 businessRouter.patch("/", requirePermission("settings.edit"), asyncHandler(updateBusiness));
+businessRouter.post("/reset-onboarding", requirePermission("settings.edit"), asyncHandler(resetBusinessForOnboarding));
 
 businessRouter.post("/whatsapp/connect", requirePermission("settings.edit"), asyncHandler(connectWhatsApp));
 businessRouter.get("/whatsapp/accounts", asyncHandler(listWhatsappAccounts));

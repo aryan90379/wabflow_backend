@@ -206,13 +206,22 @@ export function generateBookingFlowJson(config) {
       price: room.price ?? null,
       currency: room.currency || "INR",
     }));
-  const shouldSelectRoom = Boolean(config.roomSelection && rooms.length);
+  const shouldAddOtherOption = Boolean(config.otherOption);
+  const shouldSelectRoom = Boolean(config.roomSelection && (rooms.length || shouldAddOtherOption));
   const timeSlots = buildTimeSlotOptions(config.availability || {});
+  const selectionOptions = [
+    ...rooms.map((room) => ({
+      id: String(room.id),
+      title: room.price ? `${String(room.name).slice(0, 20)} (${formatPrice(room.price, room.currency)})` : String(room.name).slice(0, 30),
+    })),
+    ...(shouldAddOtherOption ? [{ id: "other", title: String(config.otherOptionLabel || "Other").slice(0, 30) }] : []),
+  ];
 
   const completePayload = {
     startDate: "${form.booking_date}",
     startTime: timeSlots.length ? "${form.booking_time_slot}" : "${form.booking_time}",
     serviceItemId: shouldSelectRoom ? "${form.service_item_id}" : "${data.serviceItemId}",
+    appointmentReason: shouldSelectRoom ? "${form.service_item_id}" : "",
     flowConfigId: config.flowConfigId || "booking",
   };
 
@@ -244,12 +253,9 @@ export function generateBookingFlowJson(config) {
             ...(shouldSelectRoom ? [{
               type: "RadioButtonsGroup",
               name: "service_item_id",
-              label: "Select the room you want to visit",
+              label: String(config.selectionLabel || "What do you want the appointment for?").slice(0, 80),
               required: true,
-              "data-source": rooms.map((room) => ({
-                id: String(room.id),
-                title: room.price ? `${String(room.name).slice(0, 20)} (${formatPrice(room.price, room.currency)})` : String(room.name).slice(0, 30),
-              })),
+              "data-source": selectionOptions,
             }] : []),
             ...(config.collectFields?.name !== false ? [{
               type: "TextInput",
@@ -285,8 +291,8 @@ export function generateBookingFlowJson(config) {
             ...(config.collectFields?.notes ? [{
               type: "TextArea",
               name: "booking_notes",
-              label: "Any Notes?",
-              required: false,
+              label: String(config.notesLabel || "Any Notes?").slice(0, 80),
+              required: Boolean(config.notesRequired),
             }] : []),
             {
               type: "Footer",
