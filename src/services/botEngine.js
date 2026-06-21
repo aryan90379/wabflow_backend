@@ -84,6 +84,86 @@ function serviceToFlowOption(service) {
   };
 }
 
+async function handleBookingFlowReply({ business, account, contact, conversation, inboundMessage, event }) {
+  if (event.type !== "flow_reply") return false;
+
+  const responseJson = event.media?.responseJson || {};
+  if (responseJson.flowConfigId !== "booking") return false;
+
+  const rawServiceItemId = responseJson.serviceItemId;
+  const serviceItemId = /^[a-f\d]{24}$/i.test(String(rawServiceItemId || "")) ? rawServiceItemId : null;
+  let selectedItemName = "";
+  let selectedItemType = "";
+
+  if (serviceItemId) {
+    const item = await ServiceItem.findOne({ _id: serviceItemId, businessId: business._id });
+    if (item) {
+      selectedItemName = item.name;
+      selectedItemType = item.type;
+    }
+  }
+
+  const metadata = new Map([
+    ...(selectedItemName ? [[selectedItemType === "room" ? "roomType" : "appointmentReason", selectedItemName]] : []),
+    ...(!serviceItemId && rawServiceItemId ? [["appointmentReason", String(responseJson.appointmentReason || rawServiceItemId)]] : []),
+  ]);
+
+  const booking = await Booking.create({
+    businessId: business._id,
+    contactId: contact._id,
+    conversationId: conversation._id,
+    serviceItemId: serviceItemId || null,
+    type: selectedItemType === "room" ? "room_booking" : "appointment",
+    status: "requested",
+    customerName: responseJson.customerName || contact.name || "",
+    customerPhone: responseJson.customerPhone || contact.phone || contact.waId,
+    startDate: responseJson.startDate,
+    startTime: responseJson.startTime,
+    notes: responseJson.notes || "",
+    metadata,
+  });
+
+  await sendAndSaveMessage({
+    account,
+    contact,
+    conversation,
+    response: {
+      type: "text",
+      text: isMedicalBusiness(business)
+        ? "Thank you! Your appointment request has been successfully submitted."
+        : "Thank you! Your booking request has been successfully submitted.",
+    },
+    senderType: "bot",
+  });
+
+  await writeDecision({
+    businessId: business._id,
+    conversationId: conversation._id,
+    messageId: inboundMessage._id,
+    intent: "booking_request",
+    confidence: 1,
+    actionTaken: "created_booking",
+    metadata: { bookingId: booking._id, fromMetaFlow: true },
+  });
+
+  notificationService.notifyBusinessStaff(business._id, {
+    type: "NEW_BOOKING",
+    title: isMedicalBusiness(business) ? "New Appointment Received" : "New Booking Received",
+    body: `You have a new ${isMedicalBusiness(business) ? "appointment" : "booking"} request from ${booking.customerName || booking.customerPhone || "a customer"}`,
+    payload: { bookingId: booking._id.toString() },
+  });
+
+  conversation.botState.active = false;
+  conversation.botState.flowId = null;
+  conversation.botState.flowVersion = null;
+  conversation.botState.currentNodeId = null;
+  conversation.botState.awaitingInput = null;
+  conversation.botState.updatedAt = new Date();
+  await conversation.save();
+
+  return true;
+}
+
 async function ensureBookingMetaFlow({ business, account, bookingConfig = {}, flowTitle = "Book Appointment" }) {
   let flowId = account.bookingFlowId;
   let flowConfigId = account.bookingFlowConfigId;
@@ -576,6 +656,10 @@ export async function processIncomingMessage(event) {
   const { intent, confidence } = detectIntent(event.text || event.selectionTitle || "");
 
   try {
+    if (await handleBookingFlowReply({ business, account, contact, conversation, inboundMessage, event })) {
+      return;
+    }
+
     if (!business.settings.botEnabled) {
       await writeDecision({
         businessId: business._id,
@@ -661,78 +745,6 @@ export async function processIncomingMessage(event) {
         metadata: { reason: "human_handoff_active" },
       });
       return;
-    }
-
-    if (event.type === "flow_reply") {
-      const responseJson = event.media?.responseJson || {};
-      const { flowConfigId } = responseJson;
-
-      if (flowConfigId === "booking") {
-        const rawServiceItemId = responseJson.serviceItemId;
-        const serviceItemId = /^[a-f\d]{24}$/i.test(String(rawServiceItemId || "")) ? rawServiceItemId : null;
-        let selectedItemName = "";
-        let selectedItemType = "";
-        
-        if (serviceItemId) {
-          const item = await ServiceItem.findById(serviceItemId);
-          if (item) {
-            selectedItemName = item.name;
-            selectedItemType = item.type;
-          }
-        }
-
-        const booking = await Booking.create({
-          businessId: business._id,
-          contactId: contact._id,
-          conversationId: conversation._id,
-          serviceItemId: serviceItemId || null,
-          type: selectedItemType === "room" ? "room_booking" : "appointment",
-          status: "requested",
-          customerName: responseJson.customerName || contact.name || "",
-          customerPhone: responseJson.customerPhone || contact.phone || contact.waId,
-          startDate: responseJson.startDate,
-          startTime: responseJson.startTime,
-          notes: responseJson.notes || "",
-          metadata: new Map([
-            ...(selectedItemName ? [[selectedItemType === "room" ? "roomType" : "appointmentReason", selectedItemName]] : []),
-            ...(!serviceItemId && rawServiceItemId ? [["appointmentReason", String(responseJson.appointmentReason || rawServiceItemId)]] : []),
-          ]),
-        });
-
-        await sendAndSaveMessage({
-          account,
-          contact,
-          conversation,
-          response: { type: "text", text: "Thank you! Your booking request has been successfully submitted." },
-          senderType: "bot",
-        });
-
-        await writeDecision({
-          businessId: business._id,
-          conversationId: conversation._id,
-          messageId: inboundMessage._id,
-          intent: "booking_request",
-          confidence: 1,
-          actionTaken: "created_booking",
-          metadata: { bookingId: booking._id, fromMetaFlow: true },
-        });
-
-        notificationService.notifyBusinessStaff(business._id, {
-          type: "NEW_BOOKING",
-          title: "New Booking Received",
-          body: `You have a new booking request from ${booking.customerName}`,
-          payload: { bookingId: booking._id.toString() }
-        });
-
-        conversation.botState.active = false;
-        conversation.botState.flowId = null;
-        conversation.botState.flowVersion = null;
-        conversation.botState.currentNodeId = null;
-        conversation.botState.awaitingInput = null;
-        conversation.botState.updatedAt = new Date();
-        await conversation.save();
-        return;
-      }
     }
 
     if (event.selectionId === "room_list" || (!event.selectionId && textLooksLikeRoomListRequest(event.text || ""))) {

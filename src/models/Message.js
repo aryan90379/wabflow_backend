@@ -37,6 +37,7 @@ const messageSchema = new mongoose.Schema(
       mimeType: { type: String, default: "" },
       filename: { type: String, default: "" },
       caption: { type: String, default: "" },
+      responseJson: { type: mongoose.Schema.Types.Mixed, default: null },
     },
     mediaUrl: { type: String, default: "" },
     clientMessageId: { type: String, sparse: true },

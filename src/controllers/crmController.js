@@ -2,6 +2,7 @@ import {
   Lead,
   Booking,
   Message,
+  ServiceItem,
   FollowUpTask,
   HandoffRequest,
   BotDecisionLog,
@@ -51,6 +52,75 @@ async function attachRecentMessages(items = []) {
   }));
 }
 
+function parseFlowReplyResponse(message = {}) {
+  if (message.media?.responseJson) return message.media.responseJson;
+
+  const rawResponse = message.rawPayload?.interactive?.nfm_reply?.response_json;
+  if (!rawResponse) return null;
+
+  try {
+    return JSON.parse(rawResponse);
+  } catch {
+    return null;
+  }
+}
+
+async function backfillBookingsFromFlowReplies(businessId) {
+  const flowReplies = await Message.find({
+    businessId,
+    type: "flow_reply",
+    direction: "inbound",
+  })
+    .select("+rawPayload")
+    .sort({ createdAt: -1 })
+    .limit(50);
+
+  for (const message of flowReplies) {
+    const responseJson = parseFlowReplyResponse(message);
+    if (responseJson?.flowConfigId !== "booking") continue;
+
+    const existing = await Booking.findOne({
+      businessId,
+      conversationId: message.conversationId,
+      contactId: message.contactId,
+      startDate: responseJson.startDate || "",
+      startTime: responseJson.startTime || "",
+    });
+    if (existing) continue;
+
+    const rawServiceItemId = responseJson.serviceItemId;
+    const serviceItemId = /^[a-f\d]{24}$/i.test(String(rawServiceItemId || "")) ? rawServiceItemId : null;
+    let selectedItemName = "";
+    let selectedItemType = "";
+
+    if (serviceItemId) {
+      const item = await ServiceItem.findOne({ _id: serviceItemId, businessId });
+      if (item) {
+        selectedItemName = item.name;
+        selectedItemType = item.type;
+      }
+    }
+
+    await Booking.create({
+      businessId,
+      contactId: message.contactId,
+      conversationId: message.conversationId,
+      serviceItemId: serviceItemId || null,
+      type: selectedItemType === "room" ? "room_booking" : "appointment",
+      status: "requested",
+      customerName: responseJson.customerName || "",
+      customerPhone: responseJson.customerPhone || "",
+      startDate: responseJson.startDate || "",
+      startTime: responseJson.startTime || "",
+      notes: responseJson.notes || "",
+      metadata: new Map([
+        ...(selectedItemName ? [[selectedItemType === "room" ? "roomType" : "appointmentReason", selectedItemName]] : []),
+        ...(!serviceItemId && rawServiceItemId ? [["appointmentReason", String(responseJson.appointmentReason || rawServiceItemId)]] : []),
+      ]),
+    });
+  }
+}
+
 export async function listLeads(req, res) {
   const result = await listModel(Lead, req, { createdAt: -1 }, [
     { path: "contactId", select: "name phone waId tags leadStage notes customFields" },
@@ -89,6 +159,7 @@ export async function updateLead(req, res) {
 }
 
 export async function listBookings(req, res) {
+  await backfillBookingsFromFlowReplies(req.business._id);
   const result = await listModel(Booking, req, { createdAt: -1 }, [
     { path: "contactId", select: "name phone waId tags leadStage notes customFields" },
     { path: "conversationId", select: "status lastMessage lastMessageAt unreadCount botState" },
