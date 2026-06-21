@@ -30,14 +30,28 @@ function buildShortUrl(slug) {
   return `${getShortLinkBaseUrl()}/q/${slug}`;
 }
 
-function buildTargetUrl(link) {
+function buildTargetUrl(link, resolvedPhoneNumber = "") {
   const encoded = encodeURIComponent(cleanMessage(link.starterMessage));
-  return `https://wa.me/${normalizePhone(link.phoneNumber)}?text=${encoded}`;
+  return `https://wa.me/${normalizePhone(resolvedPhoneNumber || link.phoneNumber)}?text=${encoded}`;
 }
 
-function serializeLink(link, includeTarget = true) {
+async function resolveLinkPhoneNumber(link) {
+  if (!link) return "";
+  if (link.whatsappAccountId && mongoose.Types.ObjectId.isValid(link.whatsappAccountId)) {
+    const account = await WhatsappAccount.findOne({
+      _id: link.whatsappAccountId,
+      businessId: link.businessId,
+    }).select("displayPhoneNumber");
+    const accountPhone = normalizePhone(account?.displayPhoneNumber);
+    if (accountPhone) return accountPhone;
+  }
+  return normalizePhone(link.phoneNumber);
+}
+
+function serializeLink(link, includeTarget = true, resolvedPhoneNumber = "") {
   if (!link) return null;
   const plain = link.toObject ? link.toObject() : link;
+  const phoneNumber = normalizePhone(resolvedPhoneNumber || plain.phoneNumber);
   return {
     id: String(plain._id || plain.id),
     _id: String(plain._id || plain.id),
@@ -45,11 +59,11 @@ function serializeLink(link, includeTarget = true) {
     whatsappAccountId: plain.whatsappAccountId ? String(plain.whatsappAccountId) : null,
     slug: plain.slug,
     title: plain.title,
-    phoneNumber: plain.phoneNumber,
+    phoneNumber,
     starterMessage: plain.starterMessage,
     active: Boolean(plain.active),
     shortUrl: buildShortUrl(plain.slug),
-    targetUrl: includeTarget ? buildTargetUrl(plain) : undefined,
+    targetUrl: includeTarget ? buildTargetUrl(plain, phoneNumber) : undefined,
     scanCount: plain.scanCount || 0,
     lastScannedAt: plain.lastScannedAt || null,
     dailyScans: plain.dailyScans || [],
@@ -118,10 +132,18 @@ export async function resolvePublicQrShortLink(req, res) {
     });
   }
 
+  const phoneNumber = await resolveLinkPhoneNumber(link);
+  if (!phoneNumber) {
+    return res.status(404).json({
+      success: false,
+      error: "QR link phone number is unavailable.",
+    });
+  }
+
   await recordScan(link, req);
   return res.json({
     success: true,
-    data: serializeLink(link),
+    data: serializeLink(link, true, phoneNumber),
   });
 }
 
@@ -131,24 +153,27 @@ export async function redirectPublicQrShortLink(req, res) {
     return res.status(404).send("This WabFlow QR link is unavailable.");
   }
 
+  const phoneNumber = await resolveLinkPhoneNumber(link);
+  if (!phoneNumber) {
+    return res.status(404).send("This WabFlow QR link phone number is unavailable.");
+  }
+
   await recordScan(link, req);
-  return res.redirect(302, buildTargetUrl(link));
+  return res.redirect(302, buildTargetUrl(link, phoneNumber));
 }
 
 export async function listQrShortLinks(req, res) {
   const links = await QrShortLink.find({ businessId: req.business._id }).sort({ createdAt: -1 });
+  const serializedLinks = await Promise.all(
+    links.map(async (link) => serializeLink(link, true, await resolveLinkPhoneNumber(link)))
+  );
   return res.json({
     success: true,
-    data: links.map((link) => serializeLink(link)),
+    data: serializedLinks,
   });
 }
 
 export async function createQrShortLink(req, res) {
-  const phoneNumber = normalizePhone(req.body.phoneNumber);
-  if (!phoneNumber) {
-    return res.status(400).json({ success: false, error: "Phone number is required." });
-  }
-
   const customSlug = cleanCustomSlug(req.body.slug);
   if (customSlug === null) {
     return res.status(400).json({
@@ -164,14 +189,21 @@ export async function createQrShortLink(req, res) {
   }
 
   let whatsappAccountId = req.body.whatsappAccountId || null;
+  let accountPhoneNumber = "";
   if (whatsappAccountId && mongoose.Types.ObjectId.isValid(whatsappAccountId)) {
     const account = await WhatsappAccount.findOne({
       _id: whatsappAccountId,
       businessId: req.business._id,
-    }).select("_id");
+    }).select("_id displayPhoneNumber");
     whatsappAccountId = account?._id || null;
+    accountPhoneNumber = normalizePhone(account?.displayPhoneNumber);
   } else {
     whatsappAccountId = null;
+  }
+
+  const phoneNumber = accountPhoneNumber || normalizePhone(req.body.phoneNumber);
+  if (!phoneNumber) {
+    return res.status(400).json({ success: false, error: "Phone number is required." });
   }
 
   const link = await QrShortLink.create({
@@ -185,7 +217,7 @@ export async function createQrShortLink(req, res) {
 
   return res.status(201).json({
     success: true,
-    data: serializeLink(link),
+    data: serializeLink(link, true, phoneNumber),
   });
 }
 
@@ -203,11 +235,19 @@ export async function updateQrShortLink(req, res) {
     link.title = String(req.body.title || "Bot QR Code").trim().slice(0, 80);
   }
   if (Object.prototype.hasOwnProperty.call(req.body, "phoneNumber")) {
-    const phoneNumber = normalizePhone(req.body.phoneNumber);
-    if (!phoneNumber) {
-      return res.status(400).json({ success: false, error: "Phone number is required." });
+    if (link.whatsappAccountId) {
+      const accountPhoneNumber = await resolveLinkPhoneNumber(link);
+      if (!accountPhoneNumber) {
+        return res.status(400).json({ success: false, error: "Connected WhatsApp phone number is unavailable." });
+      }
+      link.phoneNumber = accountPhoneNumber;
+    } else {
+      const phoneNumber = normalizePhone(req.body.phoneNumber);
+      if (!phoneNumber) {
+        return res.status(400).json({ success: false, error: "Phone number is required." });
+      }
+      link.phoneNumber = phoneNumber;
     }
-    link.phoneNumber = phoneNumber;
   }
   if (Object.prototype.hasOwnProperty.call(req.body, "starterMessage")) {
     link.starterMessage = cleanMessage(req.body.starterMessage);
@@ -218,9 +258,10 @@ export async function updateQrShortLink(req, res) {
   }
 
   await link.save();
+  const phoneNumber = await resolveLinkPhoneNumber(link);
   return res.json({
     success: true,
-    data: serializeLink(link),
+    data: serializeLink(link, true, phoneNumber),
   });
 }
 
