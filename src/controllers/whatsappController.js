@@ -1267,6 +1267,13 @@ export async function updateWhatsappBusinessProfile(
     account.profileAbout = about;
     account.profileDescription =
       description;
+    
+    if (profilePictureUrl && account.profilePictureUrl !== profilePictureUrl) {
+      account.profilePictureChangeCount = (account.profilePictureChangeCount || 0) + 1;
+      account.profilePictureLastUpdatedAt = new Date();
+      account.profilePictureUpdateStatus = "success";
+    }
+    
     account.profilePictureUrl =
       profilePictureUrl;
 

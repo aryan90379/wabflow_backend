@@ -148,6 +148,9 @@ export async function saveInboundMessage({ account, contact, conversation, event
     });
   }
 
+  const isBotHandling = conversation.status === "bot_handling";
+  const unreadInc = isBotHandling ? 0 : 1;
+
   await Conversation.updateOne(
     { _id: conversation._id },
     {
@@ -160,22 +163,24 @@ export async function saveInboundMessage({ account, contact, conversation, event
           at: message.createdAt,
         },
       },
-      $inc: { unreadCount: 1 },
+      $inc: { unreadCount: unreadInc },
     }
   );
 
   const messagePayload = message.toObject();
+  const newUnreadCount = (conversation.unreadCount || 0) + unreadInc;
+
   broadcastToBusiness(account.businessId.toString(), "new_message", messagePayload);
   broadcastRawToBusiness(account.businessId.toString(), "new_message", messagePayload);
   broadcastToBusiness(account.businessId.toString(), "conversation_updated", { 
     _id: conversation._id, 
     lastMessageAt: message.createdAt,
-    unreadCount: (conversation.unreadCount || 0) + 1 
+    unreadCount: newUnreadCount 
   });
   broadcastRawToBusiness(account.businessId.toString(), "conversation_updated", {
     _id: conversation._id,
     lastMessageAt: message.createdAt,
-    unreadCount: (conversation.unreadCount || 0) + 1,
+    unreadCount: newUnreadCount,
   });
 
   return message;
