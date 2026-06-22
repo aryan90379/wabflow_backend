@@ -10,7 +10,7 @@ export const createTicket = async (req, res) => {
 
   const ticket = await SupportTicket.create({
     businessId: req.business._id,
-    createdBy: req.user._id,
+    createdBy: req.userId,
     subject,
     description,
     status: "open",
@@ -20,7 +20,7 @@ export const createTicket = async (req, res) => {
   if (description || (attachments && attachments.length > 0)) {
     await SupportMessage.create({
       ticketId: ticket._id,
-      senderId: req.user._id,
+      senderId: req.userId,
       senderRole: "user",
       message: description || "Attached files",
       attachments: attachments || [],
@@ -80,7 +80,7 @@ export const sendMessage = async (req, res) => {
 
   const supportMessage = await SupportMessage.create({
     ticketId: ticket._id,
-    senderId: req.user._id,
+    senderId: req.userId,
     senderRole: "user",
     message: message || "Attached files",
     attachments: attachments || [],
@@ -153,7 +153,7 @@ export const adminSendMessage = async (req, res) => {
 
   const supportMessage = await SupportMessage.create({
     ticketId: ticket._id,
-    senderId: req.user._id,
+    senderId: req.userId,
     senderRole: "developer",
     message: message || "Attached files",
     attachments: attachments || [],

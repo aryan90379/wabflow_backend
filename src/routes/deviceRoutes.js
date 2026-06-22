@@ -5,5 +5,6 @@ import { authMiddleware } from "../middleware/authMiddleware.js";
 const router = express.Router();
 
 router.post("/push-token", authMiddleware, registerPushToken);
+router.post("/register-token", authMiddleware, registerPushToken);
 
 export default router;
