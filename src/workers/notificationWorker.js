@@ -18,6 +18,56 @@ export const notificationQueue = new Queue("push-notifications", { connection })
 
 console.log("Notification Queue initialized.");
 
+const notificationCopy = {
+  NEW_CHAT: { title: "New chat needs attention", channelId: "wabflow_messages" },
+  NEW_MESSAGE: { title: "New customer message", channelId: "wabflow_messages" },
+  NEW_LEAD: { title: "New lead captured", channelId: "wabflow_updates" },
+  NEW_BOOKING: { title: "New booking request", channelId: "wabflow_bookings" },
+  HUMAN_HANDOFF: { title: "Human handoff requested", channelId: "wabflow_messages" },
+  SYSTEM: { title: "WabFlow update", channelId: "wabflow_updates" },
+};
+
+function buildPushMessage(notification, tokens) {
+  const copy = notificationCopy[notification.type] || notificationCopy.SYSTEM;
+  const title = notification.title || copy.title;
+  const body = notification.body || "Open WabFlow for details.";
+  const payload = notification.payload || {};
+
+  return {
+    notification: { title, body },
+    data: {
+      type: String(notification.type || "SYSTEM"),
+      payload: JSON.stringify(payload),
+      businessId: String(notification.businessId || ""),
+      notificationId: String(notification._id || ""),
+    },
+    android: {
+      priority: "high",
+      notification: {
+        title,
+        body,
+        channelId: copy.channelId,
+        icon: "ic_stat_wabflow_nodes",
+        color: "#22C55E",
+        sound: "default",
+        defaultSound: true,
+        priority: "high",
+        visibility: "public",
+        tag: `${notification.type}-${payload.conversationId || payload.bookingId || notification._id}`,
+      },
+    },
+    apns: {
+      payload: {
+        aps: {
+          sound: "default",
+          "thread-id": String(payload.conversationId || payload.bookingId || notification.businessId || "wabflow"),
+        },
+      },
+    },
+    tokens,
+  };
+}
+
 export const notificationWorker = new Worker(
   "push-notifications",
   async (job) => {
@@ -57,17 +107,7 @@ export const notificationWorker = new Worker(
       const tokens = [...new Set(sessions.map((s) => s.pushToken))];
 
       // 4. Construct Firebase Payload
-      const message = {
-        notification: {
-          title: notification.title,
-          body: notification.body,
-        },
-        data: {
-          type: notification.type,
-          payload: JSON.stringify(notification.payload || {}),
-        },
-        tokens,
-      };
+      const message = buildPushMessage(notification, tokens);
 
       // 5. Send via Firebase Admin
       console.log(`[Worker] Dispatching FCM message to ${tokens.length} unique tokens...`);

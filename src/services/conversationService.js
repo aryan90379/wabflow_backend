@@ -128,14 +128,16 @@ export async function saveInboundMessage({ account, contact, conversation, event
   const messageCount = await Message.countDocuments({ conversationId: conversation._id });
   const isFirstMessage = messageCount <= 1; // <= 1 because we just created the message above
 
-  if (isFirstMessage) {
+  const shouldNotifyForChat = conversation.status === "human_needed" || conversation.botState?.active === false;
+
+  if (isFirstMessage && shouldNotifyForChat) {
     notificationService.notifyBusinessStaff(account.businessId, {
       type: "NEW_CHAT",
       title: "New Lead / Chat",
       body: `${contact.name || contact.phone} just started a new conversation!`,
       payload: { conversationId: conversation._id.toString() }
     });
-  } else if (conversation.status === "human_needed" || conversation.botState?.active === false) {
+  } else if (!isFirstMessage && shouldNotifyForChat) {
     // Only send push notifications for every message IF the bot is turned off or human handoff is requested
     notificationService.notifyBusinessStaff(account.businessId, {
       type: "NEW_MESSAGE",
