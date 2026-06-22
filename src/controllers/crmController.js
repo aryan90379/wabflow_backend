@@ -188,7 +188,7 @@ export async function getBooking(req, res) {
 }
 
 export async function updateBooking(req, res) {
-  const allowed = ["serviceItemId", "type", "status", "startDate", "endDate", "startTime", "guests", "customerName", "customerPhone", "notes", "metadata"];
+  const allowed = ["serviceItemId", "type", "status", "startDate", "endDate", "startTime", "endTime", "guests", "customerName", "customerPhone", "notes", "metadata"];
   const update = Object.fromEntries(Object.entries(req.body).filter(([key]) => allowed.includes(key)));
   const booking = await Booking.findOneAndUpdate(
     { _id: req.params.bookingId, businessId: req.business._id },
@@ -201,7 +201,7 @@ export async function updateBooking(req, res) {
 }
 
 export async function createBooking(req, res) {
-  const allowed = ["serviceItemId", "contactId", "conversationId", "type", "status", "startDate", "endDate", "startTime", "guests", "customerName", "customerPhone", "notes", "metadata"];
+  const allowed = ["serviceItemId", "contactId", "conversationId", "type", "status", "startDate", "endDate", "startTime", "endTime", "guests", "customerName", "customerPhone", "notes", "metadata"];
   const data = Object.fromEntries(Object.entries(req.body).filter(([key]) => allowed.includes(key)));
   
   const booking = await Booking.create({
