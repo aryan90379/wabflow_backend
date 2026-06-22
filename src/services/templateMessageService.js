@@ -65,6 +65,14 @@ export async function sendApprovedTemplateMessage({
     status: "queued",
   });
 
+  const updatedConversation = await Conversation.findOneAndUpdate(
+    { _id: conversation._id },
+    { $inc: { lastServerSequence: 1 } },
+    { new: true }
+  );
+  temporaryMessage.serverSequence = updatedConversation.lastServerSequence;
+  await temporaryMessage.save();
+
   try {
     const result = await sendWhatsappTemplatePayload(account._id, phone, template);
     temporaryMessage.whatsappMessageId = result?.messages?.[0]?.id || null;

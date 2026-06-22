@@ -739,16 +739,21 @@ export async function syncMessages(req, res) {
 
   const afterSequence = Number(req.query.afterSequence) || 0;
   const limit = Math.min(100, Math.max(1, Number(req.query.limit || 50)));
+  const filter = { conversationId: conversation._id };
 
-  const messages = await Message.find({
-    conversationId: conversation._id,
-    serverSequence: { $gt: afterSequence },
-  })
-    .sort({ serverSequence: 1 })
+  if (afterSequence > 0) {
+    filter.serverSequence = { $gt: afterSequence };
+  }
+
+  const messages = await Message.find(filter)
+    .sort(afterSequence > 0 ? { serverSequence: 1, createdAt: 1 } : { createdAt: 1 })
     .limit(limit);
 
   const hasMore = messages.length === limit;
-  const nextSequence = messages.length > 0 ? messages[messages.length - 1].serverSequence : afterSequence;
+  const nextSequence = messages.reduce((max, message) => {
+    const sequence = Number(message.serverSequence || 0);
+    return Number.isFinite(sequence) ? Math.max(max, sequence) : max;
+  }, afterSequence);
 
   return res.json({
     success: true,
@@ -758,4 +763,3 @@ export async function syncMessages(req, res) {
     serverTime: new Date().toISOString(),
   });
 }
-
