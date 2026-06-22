@@ -111,6 +111,18 @@ import {
   updateListItem,
   deleteListItem,
 } from "../controllers/list.controller.js";
+import {
+  adminGetMessages,
+  adminGetTicket,
+  adminListTickets,
+  adminSendMessage,
+  adminUpdateTicket,
+  createTicket,
+  getMessages,
+  getTicket,
+  listTickets,
+  sendMessage,
+} from "../controllers/supportController.js";
 
 import { generateBookingFlow } from "../controllers/metaFlowController.js";
 import { receiveWebhook, verifyWebhook } from "../controllers/webhookController.js";
@@ -151,6 +163,14 @@ apiRouter.get("/public/qr-links/:slug", asyncHandler(resolvePublicQrShortLink));
 // --- Tutorials ---
 apiRouter.get("/tutorials", authMiddleware, asyncHandler(getTutorials));
 apiRouter.post("/tutorials", authMiddleware, asyncHandler(updateTutorials));
+
+// --- Support Tickets (Admin) ---
+// Note: We protect these with authMiddleware. In a real scenario we might add an isAdmin middleware.
+apiRouter.get("/admin/support-tickets", authMiddleware, asyncHandler(adminListTickets));
+apiRouter.get("/admin/support-tickets/:ticketId", authMiddleware, asyncHandler(adminGetTicket));
+apiRouter.patch("/admin/support-tickets/:ticketId", authMiddleware, asyncHandler(adminUpdateTicket));
+apiRouter.get("/admin/support-tickets/:ticketId/messages", authMiddleware, asyncHandler(adminGetMessages));
+apiRouter.post("/admin/support-tickets/:ticketId/messages", authMiddleware, asyncHandler(adminSendMessage));
 
 // --- Device ---
 apiRouter.use("/device", deviceRoutes);
@@ -248,7 +268,14 @@ businessRouter.post("/follow-ups", requirePermission("inbox.manage"), asyncHandl
 businessRouter.patch("/follow-ups/:followUpId", requirePermission("inbox.manage"), asyncHandler(updateFollowUp));
 businessRouter.get("/handoffs", requirePermission("inbox.view"), asyncHandler(listHandoffs));
 businessRouter.patch("/handoffs/:handoffId", requirePermission("inbox.manage"), asyncHandler(updateHandoff));
+
 businessRouter.get("/bot-decision-logs", requirePermission("inbox.view"), asyncHandler(listDecisionLogs));
+
+businessRouter.get("/support-tickets", requirePermission("settings.view"), asyncHandler(listTickets));
+businessRouter.post("/support-tickets", requirePermission("settings.edit"), asyncHandler(createTicket));
+businessRouter.get("/support-tickets/:ticketId", requirePermission("settings.view"), asyncHandler(getTicket));
+businessRouter.get("/support-tickets/:ticketId/messages", requirePermission("settings.view"), asyncHandler(getMessages));
+businessRouter.post("/support-tickets/:ticketId/messages", requirePermission("settings.edit"), asyncHandler(sendMessage));
 
 // Team & Access
 businessRouter.get("/team", requirePermission("team.view"), asyncHandler(listTeamMembers));

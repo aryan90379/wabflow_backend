@@ -18,3 +18,5 @@ export { HandoffRequest } from "./HandoffRequest.js";
 export { BotDecisionLog } from "./BotDecisionLog.js";
 export { Notification } from "./Notification.js";
 export { QrShortLink } from "./QrShortLink.js";
+export { SupportTicket } from "./SupportTicket.js";
+export { SupportMessage } from "./SupportMessage.js";

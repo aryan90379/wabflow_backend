@@ -9,6 +9,7 @@ import {
 import { ListItem } from "../models/ListItem.js";
 import { interpolate, normalizeText } from "../utils/text.js";
 import { createHandoff, sendAndSaveMessage } from "./conversationService.js";
+import { broadcastToBusiness } from "./socketService.js";
 
 const MAX_NODE_STEPS = 25;
 
@@ -289,6 +290,7 @@ async function getOrCreateBooking(context, defaults = {}) {
       ...defaults,
     });
     context.conversation.botState.variables.set("_bookingId", String(booking._id));
+    broadcastToBusiness(String(context.business._id), "booking_created", booking);
   }
 
   return booking;
@@ -326,6 +328,7 @@ async function saveAnswer(context, awaiting, value) {
       if (roomType) booking.metadata.set("roomType", roomType);
     }
     await booking.save();
+    broadcastToBusiness(String(context.business._id), "booking_updated", booking);
   }
 }
 
