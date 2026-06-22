@@ -20,6 +20,7 @@ const bookingSchema = new mongoose.Schema(
     startDate: { type: String, default: "" },
     endDate: { type: String, default: "" },
     startTime: { type: String, default: "" },
+    endTime: { type: String, default: "" },
     guests: { type: Number, default: 1 },
     customerName: { type: String, default: "" },
     customerPhone: { type: String, default: "" },
