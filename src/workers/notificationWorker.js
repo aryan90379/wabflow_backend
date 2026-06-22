@@ -27,11 +27,37 @@ const notificationCopy = {
   SYSTEM: { title: "WabFlow update", channelId: "wabflow_updates" },
 };
 
-function buildPushMessage(notification, tokens) {
+function getNotificationThread(notification, payload) {
+  if (payload.conversationId) {
+    const key = `chat-${payload.conversationId}`;
+    return { tag: key, collapseKey: key, countQuery: { "payload.conversationId": payload.conversationId } };
+  }
+
+  if (payload.bookingId) {
+    const key = `booking-${payload.bookingId}`;
+    return { tag: key, collapseKey: key, countQuery: { "payload.bookingId": payload.bookingId } };
+  }
+
+  const key = `${notification.type || "SYSTEM"}-${notification.businessId || "wabflow"}`;
+  return { tag: key, collapseKey: key, countQuery: { type: notification.type } };
+}
+
+async function getThreadNotificationCount(notification, thread) {
+  return Notification.countDocuments({
+    businessId: notification.businessId,
+    recipientId: notification.recipientId,
+    status: { $ne: "failed" },
+    ...thread.countQuery,
+  });
+}
+
+async function buildPushMessage(notification, tokens) {
   const copy = notificationCopy[notification.type] || notificationCopy.SYSTEM;
   const title = notification.title || copy.title;
   const body = notification.body || "Open WabFlow for details.";
   const payload = notification.payload || {};
+  const thread = getNotificationThread(notification, payload);
+  const notificationCount = await getThreadNotificationCount(notification, thread);
 
   return {
     notification: { title, body },
@@ -43,6 +69,7 @@ function buildPushMessage(notification, tokens) {
     },
     android: {
       priority: "high",
+      collapseKey: thread.collapseKey,
       notification: {
         title,
         body,
@@ -53,14 +80,15 @@ function buildPushMessage(notification, tokens) {
         defaultSound: true,
         priority: "high",
         visibility: "public",
-        tag: `${notification.type}-${payload.conversationId || payload.bookingId || notification._id}`,
+        tag: thread.tag,
+        notificationCount,
       },
     },
     apns: {
       payload: {
         aps: {
           sound: "default",
-          "thread-id": String(payload.conversationId || payload.bookingId || notification.businessId || "wabflow"),
+          "thread-id": thread.tag,
         },
       },
     },
@@ -107,7 +135,7 @@ export const notificationWorker = new Worker(
       const tokens = [...new Set(sessions.map((s) => s.pushToken))];
 
       // 4. Construct Firebase Payload
-      const message = buildPushMessage(notification, tokens);
+      const message = await buildPushMessage(notification, tokens);
 
       // 5. Send via Firebase Admin
       console.log(`[Worker] Dispatching FCM message to ${tokens.length} unique tokens...`);
