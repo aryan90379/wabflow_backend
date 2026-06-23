@@ -9,6 +9,58 @@ import { sendWhatsappTemplatePayload } from "./whatsappClient.js";
 import { broadcastToBusiness } from "./socketService.js";
 import { broadcastRawToBusiness } from "./rawChatSocketService.js";
 
+function getTemplateParameterCount(body = "") {
+  const variables = [...String(body).matchAll(/\{\{\s*(\d+)\s*\}\}/g)]
+    .map((match) => Number(match[1]))
+    .filter((value) => Number.isInteger(value) && value > 0);
+
+  return variables.length ? Math.max(...variables) : 0;
+}
+
+function normalizeTemplateVariables(template, templateVariables, customerName) {
+  const parameterCount = getTemplateParameterCount(template.body);
+  if (!parameterCount) return [];
+
+  if (Array.isArray(templateVariables)) {
+    return Array.from({ length: parameterCount }, (_, index) => (
+      templateVariables[index] ?? (index === 0 ? customerName : "")
+    ));
+  }
+
+  if (templateVariables && typeof templateVariables === "object") {
+    if (templateVariables.kind === "booking_reminder") {
+      const compact = [
+        templateVariables.customerName,
+        templateVariables.reason,
+        templateVariables.date,
+        templateVariables.time,
+      ];
+      const withBusiness = [
+        templateVariables.customerName,
+        templateVariables.reason,
+        templateVariables.businessName,
+        templateVariables.date,
+        templateVariables.time,
+      ];
+      const values = parameterCount <= 4 ? compact : withBusiness;
+
+      return Array.from({ length: parameterCount }, (_, index) => values[index] ?? "");
+    }
+
+    if (Array.isArray(templateVariables.values)) {
+      return Array.from({ length: parameterCount }, (_, index) => templateVariables.values[index] ?? "");
+    }
+  }
+
+  return Array.from({ length: parameterCount }, (_, index) => (index === 0 ? customerName : ""));
+}
+
+function renderTemplateBody(body, variables) {
+  return variables.reduce((text, value, index) => (
+    text.replace(new RegExp(`\\{\\{\\s*${index + 1}\\s*\\}\\}`, "g"), String(value ?? ""))
+  ), body);
+}
+
 export async function sendApprovedTemplateMessage({
   businessId,
   templateId,
@@ -46,6 +98,8 @@ export async function sendApprovedTemplateMessage({
     throw error;
   }
 
+  const normalizedVariables = normalizeTemplateVariables(template, templateVariables, customerName);
+
   const { contact, conversation } = await findOrCreateContactAndConversation({
     businessId,
     whatsappAccountId: account._id,
@@ -54,10 +108,8 @@ export async function sendApprovedTemplateMessage({
     profileName: customerName,
   });
 
-  const renderedText = templateVariables.length
-    ? templateVariables.reduce((text, value, index) => (
-        text.replace(new RegExp(`\\{\\{\\s*${index + 1}\\s*\\}\\}`, "g"), String(value ?? ""))
-      ), template.body)
+  const renderedText = normalizedVariables.length
+    ? renderTemplateBody(template.body, normalizedVariables)
     : template.body;
 
   const temporaryMessage = await Message.create({
@@ -81,7 +133,7 @@ export async function sendApprovedTemplateMessage({
   await temporaryMessage.save();
 
   try {
-    const result = await sendWhatsappTemplatePayload(account._id, phone, template, templateVariables);
+    const result = await sendWhatsappTemplatePayload(account._id, phone, template, normalizedVariables);
     temporaryMessage.whatsappMessageId = result?.messages?.[0]?.id || null;
     await temporaryMessage.save();
 

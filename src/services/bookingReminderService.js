@@ -1,10 +1,15 @@
-import { Booking } from "../models/index.js";
+import { Booking, WhatsappMessageTemplate } from "../models/index.js";
 import { bookingReminderQueue } from "../workers/bookingReminderQueue.js";
 import { sendApprovedTemplateMessage } from "./templateMessageService.js";
 
 export const DEFAULT_BOOKING_REMINDER_LEAD_MINUTES = 24 * 60;
 
 const REMINDER_JOB_PREFIX = "booking-reminder";
+
+function isBookingReminderTemplate(template) {
+  const haystack = `${template?.name || ""} ${template?.displayName || ""} ${template?.body || ""}`.toLowerCase();
+  return /appointment|reminder|visit|booking|patient/.test(haystack);
+}
 
 export function getBookingAppointmentDate(booking) {
   if (!booking?.startDate || !booking?.startTime) return null;
@@ -45,13 +50,14 @@ export function getReminderVariables(booking) {
   const dateLabel = booking.startDate || "";
   const timeLabel = booking.startTime || "";
 
-  return [
-    booking.customerName || "there",
+  return {
+    kind: "booking_reminder",
+    customerName: booking.customerName || "there",
     reason,
     businessName,
-    dateLabel,
-    timeLabel,
-  ];
+    date: dateLabel,
+    time: timeLabel,
+  };
 }
 
 export async function prepareBookingReminders(bookingInput) {
@@ -75,6 +81,23 @@ export async function prepareBookingReminders(bookingInput) {
 
   const appointmentDate = getBookingAppointmentDate(booking);
   if (!appointmentDate) return booking;
+
+  const template = await WhatsappMessageTemplate.findOne({
+    _id: templateId,
+    businessId: booking.businessId,
+  }).select("name displayName body");
+
+  if (!isBookingReminderTemplate(template)) {
+    booking.reminders = (booking.reminders || []).map((reminder) => (
+      ["sent", "failed"].includes(reminder.status) ? reminder : {
+        ...reminder,
+        status: "skipped",
+        error: "Selected template is not an appointment reminder template.",
+      }
+    ));
+    await booking.save();
+    return booking;
+  }
 
   const now = new Date();
   const existingByKey = new Map((booking.reminders || []).map((reminder) => [reminder.key, reminder]));
@@ -145,6 +168,18 @@ export async function sendBookingReminder({ bookingId, reminderKey }) {
   await booking.save();
 
   try {
+    const template = await WhatsappMessageTemplate.findOne({
+      _id: reminder.templateId,
+      businessId: booking.businessId,
+    }).select("name displayName body");
+
+    if (!isBookingReminderTemplate(template)) {
+      reminder.status = "skipped";
+      reminder.error = "Selected template is not an appointment reminder template.";
+      await booking.save();
+      return null;
+    }
+
     const result = await sendApprovedTemplateMessage({
       businessId: booking.businessId,
       templateId: reminder.templateId,
