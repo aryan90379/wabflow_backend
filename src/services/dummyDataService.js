@@ -86,25 +86,25 @@ export async function generateDummyData(user) {
       tokenType: "system_user",
     });
 
-    // 3. Generate Contacts
-    const contactsData = [
-      { name: "John Doe", phone: "+15550101", notes: "VIP Client" },
-      { name: "Alice Smith", phone: "+15550102", notes: "Prefers evening appointments" },
-      { name: "Bob Johnson", phone: "+15550103" },
-      { name: "Emma Davis", phone: "+15550104" },
-      { name: "Michael Brown", phone: "+15550105" },
-    ];
-
-    const contacts = await Contact.insertMany(
-      contactsData.map(c => ({
-        ...c,
-        waId: c.phone.replace("+", ""),
+    // 3. Generate Dense Contacts (15+ Contacts)
+    const firstNames = ["John", "Alice", "Bob", "Emma", "Michael", "Sarah", "David", "Laura", "James", "Sophia", "Oliver", "Isabella", "William", "Mia", "Lucas", "Charlotte"];
+    const lastNames = ["Doe", "Smith", "Johnson", "Davis", "Brown", "Miller", "Wilson", "Moore", "Taylor", "Anderson", "Thomas", "Jackson", "White", "Harris", "Martin", "Thompson"];
+    
+    const contactsData = [];
+    for (let i = 0; i < 15; i++) {
+      contactsData.push({
+        name: `${firstNames[i]} ${lastNames[i]}`,
+        phone: `+155501${i.toString().padStart(2, '0')}`,
+        notes: i % 3 === 0 ? "VIP Client" : i % 5 === 0 ? "Prefers evening appointments" : "",
+        waId: `155501${i.toString().padStart(2, '0')}`,
         businessId: business._id,
         profilePic: DUMMY_IMAGE,
         status: "active",
         optedIn: true,
-      }))
-    );
+      });
+    }
+
+    const contacts = await Contact.insertMany(contactsData);
 
     // 4. Generate ListGroup and ListItems (Catalog)
     const listGroup = await ListGroup.create({
@@ -117,8 +117,9 @@ export async function generateDummyData(user) {
       { listGroupId: listGroup._id, businessId: business._id, title: "Deep Tissue Massage", price: 2500, details: "60 mins of deep relaxation.", imageUrl: DUMMY_IMAGE, active: true },
       { listGroupId: listGroup._id, businessId: business._id, title: "Premium Haircut", price: 800, details: "Includes wash and styling.", imageUrl: DUMMY_IMAGE, active: true },
       { listGroupId: listGroup._id, businessId: business._id, title: "Facial Treatment", price: 1500, details: "Rejuvenating facial therapy.", imageUrl: DUMMY_IMAGE, active: true },
+      { listGroupId: listGroup._id, businessId: business._id, title: "Manicure & Pedicure", price: 1200, details: "Complete nail care.", imageUrl: DUMMY_IMAGE, active: true },
+      { listGroupId: listGroup._id, businessId: business._id, title: "Hot Stone Therapy", price: 3000, details: "Ultimate relaxation.", imageUrl: DUMMY_IMAGE, active: true },
     ]);
-
 
     // 5. Generate Dates
     const now = new Date();
@@ -154,141 +155,94 @@ export async function generateDummyData(user) {
       }
     ]);
 
-    // 7. Generate Conversations and Messages
-    const conv1 = await Conversation.create({
-      businessId: business._id,
-      contactId: contacts[0]._id,
-      whatsappAccountId: waAccount._id,
-      contactPhone: contacts[0].phone,
-      status: "open",
-      lastMessageAt: new Date(now.getTime() - 5000),
-      lastMessagePreview: "Sure, see you tomorrow!",
-    });
-    
-    await Message.insertMany([
-      {
+    // 7. Generate Conversations, Messages, Leads, and Bookings for each contact
+    const conversationsToInsert = [];
+    for (let i = 0; i < 15; i++) {
+      conversationsToInsert.push({
         businessId: business._id,
-        conversationId: conv1._id,
-        contactId: contacts[0]._id,
+        contactId: contacts[i]._id,
         whatsappAccountId: waAccount._id,
-        direction: "outbound",
-        senderType: "owner",
-        status: "read",
-        type: "text",
-        text: "Hi John, confirming your appointment for tomorrow.",
-        createdAt: new Date(now.getTime() - 60000),
-        serverSequence: 1,
-        clientMessageId: "msg_1",
-      },
-      {
-        businessId: business._id,
-        conversationId: conv1._id,
-        contactId: contacts[0]._id,
-        whatsappAccountId: waAccount._id,
-        direction: "inbound",
-        senderType: "customer",
-        status: "received",
-        type: "text",
-        text: "Sure, see you tomorrow!",
-        createdAt: new Date(now.getTime() - 5000),
-        serverSequence: 2,
-        clientMessageId: "msg_2",
-      }
-    ]);
+        contactPhone: contacts[i].phone,
+        status: i % 4 === 0 ? "closed" : "open",
+        lastMessageAt: new Date(now.getTime() - Math.random() * 86400000 * 3), // random within last 3 days
+        lastMessagePreview: `Message from ${contacts[i].name}`,
+      });
+    }
+    const convs = await Conversation.insertMany(conversationsToInsert);
 
-    const conv2 = await Conversation.create({
-      businessId: business._id,
-      contactId: contacts[1]._id,
-      whatsappAccountId: waAccount._id,
-      contactPhone: contacts[1].phone,
-      status: "open",
-      lastMessageAt: new Date(now.getTime() - 3600000),
-      lastMessagePreview: "What are your prices?",
-    });
+    const messagesToInsert = [];
+    const leadsToInsert = [];
+    const bookingsToInsert = [];
 
-    await Message.insertMany([
-      {
-        businessId: business._id,
-        conversationId: conv2._id,
-        contactId: contacts[1]._id,
-        whatsappAccountId: waAccount._id,
-        direction: "inbound",
-        senderType: "customer",
-        status: "received",
-        type: "text",
-        text: "What are your prices?",
-        createdAt: new Date(now.getTime() - 3600000),
-        serverSequence: 1,
-        clientMessageId: "msg_3",
+    for (let i = 0; i < 15; i++) {
+      const conv = convs[i];
+      const contact = contacts[i];
+      
+      // Add 3-5 messages per conversation
+      const numMessages = 3 + (i % 3);
+      for (let j = 0; j < numMessages; j++) {
+        const isCustomer = j % 2 === 0;
+        messagesToInsert.push({
+          businessId: business._id,
+          conversationId: conv._id,
+          contactId: contact._id,
+          whatsappAccountId: waAccount._id,
+          direction: isCustomer ? "inbound" : "outbound",
+          senderType: isCustomer ? "customer" : "owner",
+          status: isCustomer ? "received" : "read",
+          type: "text",
+          text: isCustomer ? `I would like to know more about your services.` : `Hi ${contact.name}! We'd love to help you.`,
+          createdAt: new Date(conv.lastMessageAt.getTime() - ((numMessages - j) * 60000)),
+          serverSequence: j + 1,
+          clientMessageId: `msg_${i}_${j}`,
+        });
       }
-    ]);
 
-    // 8. Generate Leads (Inquiries)
-    await Lead.insertMany([
-      {
-        businessId: business._id,
-        contactId: contacts[0]._id,
-        conversationId: conv1._id,
-        source: "whatsapp",
-        intent: "enquiry",
-        score: 85,
-        status: "new",
-        requirement: "Looking for a couple's spa package.",
-        budget: "2500",
-        preferredDate: tomorrow.toISOString().split("T")[0],
-        preferredTime: "Evening",
-        city: "San Francisco",
-        updatedByMemberId: member._id,
-        updatedByName: member.name,
-      },
-      {
-        businessId: business._id,
-        contactId: contacts[1]._id,
-        conversationId: conv2._id,
-        source: "whatsapp",
-        intent: "pricing",
-        score: 40,
-        status: "contacted",
-        requirement: "Wants to know haircut prices.",
-        budget: null,
+      // Add leads for half of them
+      if (i % 2 === 0) {
+        leadsToInsert.push({
+          businessId: business._id,
+          contactId: contact._id,
+          conversationId: conv._id,
+          source: "whatsapp",
+          intent: i % 3 === 0 ? "pricing" : "enquiry",
+          score: 40 + (i * 3),
+          status: i % 4 === 0 ? "booked" : i % 3 === 0 ? "contacted" : "new",
+          requirement: `Interested in a ${i % 2 === 0 ? 'massage' : 'haircut'}.`,
+          budget: `${1500 + i * 100}`,
+          preferredDate: new Date(now.getTime() + 86400000 * (i % 5)).toISOString().split("T")[0],
+          preferredTime: i % 2 === 0 ? "Evening" : "Morning",
+          city: "San Francisco",
+          updatedByMemberId: member._id,
+          updatedByName: member.name,
+        });
       }
-    ]);
 
-    // 9. Generate Bookings
-    await Booking.insertMany([
-      {
-        businessId: business._id,
-        contactId: contacts[0]._id,
-        conversationId: conv1._id,
-        type: "appointment",
-        status: "confirmed",
-        startDate: tomorrow.toISOString().split("T")[0],
-        startTime: "10:00",
-        endTime: "11:30",
-        guests: 1,
-        customerName: contacts[0].name,
-        customerPhone: contacts[0].phone,
-        notes: "Requested deep tissue massage.",
-        updatedByMemberId: member._id,
-        updatedByName: member.name,
-      },
-      {
-        businessId: business._id,
-        contactId: contacts[1]._id,
-        conversationId: conv2._id,
-        type: "appointment",
-        status: "requested",
-        startDate: new Date(Date.now() + 86400000 * 3).toISOString().split("T")[0],
-        startTime: "14:00",
-        endTime: "15:00",
-        guests: 1,
-        customerName: contacts[1].name,
-        customerPhone: contacts[1].phone,
-        notes: "Haircut and styling.",
-        updatedByMemberId: member._id,
-        updatedByName: member.name,
+      // Add bookings for a third of them
+      if (i % 3 === 0) {
+        const d = new Date(now.getTime() + 86400000 * (i % 7));
+        bookingsToInsert.push({
+          businessId: business._id,
+          contactId: contact._id,
+          conversationId: conv._id,
+          type: "appointment",
+          status: i === 0 ? "confirmed" : i % 6 === 0 ? "completed" : "requested",
+          startDate: d.toISOString().split("T")[0],
+          startTime: `${10 + (i % 8)}:00`,
+          endTime: `${11 + (i % 8)}:30`,
+          guests: 1,
+          customerName: contact.name,
+          customerPhone: contact.phone,
+          notes: `Booking for ${contact.name}.`,
+          updatedByMemberId: member._id,
+          updatedByName: member.name,
+        });
       }
-    ]);
+    }
+
+    await Message.insertMany(messagesToInsert);
+    await Lead.insertMany(leadsToInsert);
+    await Booking.insertMany(bookingsToInsert);
 
     // 9. Generate BotKnowledge (FAQ)
     await BotKnowledge.insertMany([
@@ -314,7 +268,7 @@ export async function generateDummyData(user) {
     await AutomationFlow.create({
       businessId: business._id,
       whatsappAccountId: waAccount._id,
-      name: "Welcome & Booking Bot",
+      name: "Premium Spa & Salon Bot",
       description: "Automatically greets customers and offers service menus.",
       status: "published",
       isDefault: true,
@@ -331,7 +285,7 @@ export async function generateDummyData(user) {
           name: "Welcome Message",
           response: {
             type: "buttons",
-            text: "Hi there! Welcome to Premium Spa & Salon. How can we help you today?",
+            text: "Hey! Welcome to Premium Spa & Salon. How can we help you today?\n\n(write hi to reset the flow)",
             buttonText: "View options",
             options: [
               { id: "opt_1", title: "View Services", nextNodeId: "node_2" },
