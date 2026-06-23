@@ -631,7 +631,7 @@ export async function updateConversationStatus(req, res) {
     conversation.assignedTo = null;
     conversation.assignedToMemberId = null;
     conversation.assignedToName = "";
-    conversation.botState.active = false;
+    conversation.botState.active = true;
     conversation.botState.flowId = null;
     conversation.botState.flowVersion = null;
     conversation.botState.currentNodeId = null;
