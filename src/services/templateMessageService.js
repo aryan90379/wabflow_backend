@@ -29,22 +29,31 @@ function normalizeTemplateVariables(template, templateVariables, customerName) {
 
   if (templateVariables && typeof templateVariables === "object") {
     if (templateVariables.kind === "booking_reminder") {
-      const compact = [
-        templateVariables.customerName,
-        templateVariables.reason,
-        templateVariables.date,
-        templateVariables.time,
-      ];
-      const withBusiness = [
-        templateVariables.customerName,
-        templateVariables.reason,
-        templateVariables.businessName,
-        templateVariables.date,
-        templateVariables.time,
-      ];
-      const values = parameterCount <= 4 ? compact : withBusiness;
+      return Array.from({ length: parameterCount }, (_, index) => {
+        const placeholder = `{{${index + 1}}}`;
+        const placeholderIndex = String(template.body || "").indexOf(placeholder);
+        const context = placeholderIndex >= 0
+          ? String(template.body || "").slice(Math.max(0, placeholderIndex - 28), placeholderIndex + placeholder.length + 28).toLowerCase()
+          : "";
 
-      return Array.from({ length: parameterCount }, (_, index) => values[index] ?? "");
+        if (index === 0 || /dear|hello|hi|patient|customer|name/.test(context)) {
+          return templateVariables.customerName || customerName || "";
+        }
+
+        if (/\bon\b|date|day/.test(context)) return templateVariables.date || "";
+        if (/\bat\b|time|slot/.test(context)) return templateVariables.time || "";
+        if (/with|from|clinic|doctor|team|business/.test(context)) return templateVariables.businessName || "";
+        if (/for|reason|visit|appointment/.test(context)) return templateVariables.reason || "";
+
+        const fallback = [
+          templateVariables.customerName || customerName,
+          templateVariables.reason,
+          templateVariables.date,
+          templateVariables.time,
+          templateVariables.businessName,
+        ];
+        return fallback[index] ?? "";
+      });
     }
 
     if (Array.isArray(templateVariables.values)) {

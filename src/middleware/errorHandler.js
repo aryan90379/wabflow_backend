@@ -7,6 +7,7 @@ export function errorHandler(error, req, res, next) {
     method: req.method,
     path: req.originalUrl,
     message: error.message,
+    meta: error.meta,
     stack: process.env.NODE_ENV === "production" ? undefined : error.stack,
   });
 
@@ -27,5 +28,6 @@ export function errorHandler(error, req, res, next) {
   res.status(error.status || 500).json({
     success: false,
     error: error.message || "Internal server error.",
+    ...(error.meta ? { meta: error.meta } : {}),
   });
 }

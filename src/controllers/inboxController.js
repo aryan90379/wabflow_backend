@@ -39,13 +39,19 @@ async function readMetaJson(response, label) {
 
   if (!response.ok || data?.error) {
     const metaError = data?.error || {};
-    const error = new Error(metaError.message || `${label} failed with status ${response.status}`);
+    const detail = metaError.error_data?.details || metaError.error_user_msg || metaError.message || "";
+    const error = new Error(detail || metaError.message || `${label} failed with status ${response.status}`);
     error.status = response.status;
     error.meta = {
+      message: metaError.message,
+      details: metaError.error_data?.details,
+      errorUserTitle: metaError.error_user_title,
+      errorUserMsg: metaError.error_user_msg,
       code: metaError.code,
       subcode: metaError.error_subcode,
       type: metaError.type,
       fbtraceId: metaError.fbtrace_id,
+      raw: data,
     };
     throw error;
   }
@@ -160,7 +166,7 @@ async function uploadTemplateHeaderImageHandle(imageUrl, accessToken) {
 }
 
 function getBodyVariableExamples(body = "") {
-  const variables = [...String(body).matchAll(/\{\{(\d+)\}\}/g)]
+  const variables = [...String(body).matchAll(/\{\{\s*(\d+)\s*\}\}/g)]
     .map((match) => Number(match[1]))
     .filter((value) => Number.isInteger(value) && value > 0);
 
@@ -176,6 +182,41 @@ function getBodyVariableExamples(body = "") {
   ];
 
   return Array.from({ length: maxVariable }, (_, index) => defaults[index] || `Sample ${index + 1}`);
+}
+
+function validateTemplateBody(body = "") {
+  const text = String(body || "").trim();
+  const variables = [...text.matchAll(/\{\{\s*(\d+)\s*\}\}/g)]
+    .map((match) => Number(match[1]))
+    .filter((value) => Number.isInteger(value) && value > 0);
+
+  if (!variables.length) return [];
+
+  const errors = [];
+  const maxVariable = Math.max(...variables);
+  const uniqueVariables = new Set(variables);
+  const wordCount = text.split(/\s+/).filter(Boolean).length;
+
+  for (let index = 1; index <= maxVariable; index += 1) {
+    if (!uniqueVariables.has(index)) {
+      errors.push(`Template variables must be sequential. Missing {{${index}}}.`);
+      break;
+    }
+  }
+
+  if (variables.length !== uniqueVariables.size) {
+    errors.push("Each template variable should appear only once.");
+  }
+
+  if (maxVariable >= 5 && wordCount < 25) {
+    errors.push("This message has too many variables for a short WhatsApp utility template. Use fewer variables or add more fixed text.");
+  }
+
+  if (/^\s*\{\{\s*\d+\s*\}\}/.test(text) || /\{\{\s*\d+\s*\}\}\s*$/.test(text)) {
+    errors.push("WhatsApp templates should not start or end with a variable.");
+  }
+
+  return errors;
 }
 
 function buildMetaTemplateComponents({ body, footer, buttons, headerType, headerImageHandle }) {
@@ -381,6 +422,15 @@ export async function createWhatsappMessageTemplate(req, res) {
     return res.status(400).json({ success: false, error: "Template message body is required." });
   }
 
+  const bodyValidationErrors = validateTemplateBody(body);
+  if (bodyValidationErrors.length) {
+    return res.status(400).json({
+      success: false,
+      error: "Template content needs adjustment.",
+      details: bodyValidationErrors,
+    });
+  }
+
   if (headerType === "IMAGE" && !/^https:\/\/\S+/i.test(headerImageUrl)) {
     return res.status(400).json({
       success: false,
@@ -405,6 +455,7 @@ export async function createWhatsappMessageTemplate(req, res) {
         name,
         category,
         language: req.body.language || "en_US",
+        allow_category_change: true,
         components,
       }),
     }),
