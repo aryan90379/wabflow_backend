@@ -110,13 +110,13 @@ export async function generateDummyData(user) {
     const listGroup = await ListGroup.create({
       businessId: business._id,
       name: "Spa Services",
-      status: "active",
+      active: true,
     });
 
     const listItems = await ListItem.insertMany([
-      { listGroupId: listGroup._id, businessId: business._id, name: "Deep Tissue Massage", price: 2500, description: "60 mins of deep relaxation.", imageUrl: DUMMY_IMAGE, isActive: true, position: 0 },
-      { listGroupId: listGroup._id, businessId: business._id, name: "Premium Haircut", price: 800, description: "Includes wash and styling.", imageUrl: DUMMY_IMAGE, isActive: true, position: 1 },
-      { listGroupId: listGroup._id, businessId: business._id, name: "Facial Treatment", price: 1500, description: "Rejuvenating facial therapy.", imageUrl: DUMMY_IMAGE, isActive: true, position: 2 },
+      { listGroupId: listGroup._id, businessId: business._id, title: "Deep Tissue Massage", price: 2500, details: "60 mins of deep relaxation.", imageUrl: DUMMY_IMAGE, active: true },
+      { listGroupId: listGroup._id, businessId: business._id, title: "Premium Haircut", price: 800, details: "Includes wash and styling.", imageUrl: DUMMY_IMAGE, active: true },
+      { listGroupId: listGroup._id, businessId: business._id, title: "Facial Treatment", price: 1500, details: "Rejuvenating facial therapy.", imageUrl: DUMMY_IMAGE, active: true },
     ]);
 
 
