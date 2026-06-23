@@ -8,6 +8,7 @@ import { sendConfiguredWhatsappResponse } from "./whatsappClient.js";
 import { broadcastToBusiness } from "./socketService.js";
 import { broadcastRawToBusiness } from "./rawChatSocketService.js";
 import { notificationService } from "./NotificationService.js";
+import { normalizeBroadcastPhone } from "../utils/phone.js";
 
 const MAP_URL_PATTERN = /https?:\/\/(?:maps\.app\.goo\.gl|(?:www\.)?google\.[^\s/]+\/maps|goo\.gl\/maps)\/\S+/i;
 
@@ -49,16 +50,22 @@ export async function findOrCreateContactAndConversation({
   profileName,
 }) {
   const now = new Date();
+  const normalizedWaId = normalizeBroadcastPhone(waId || phone);
+  const normalizedPhone = normalizeBroadcastPhone(phone || waId);
+
+  if (!normalizedWaId) {
+    throw new Error("A valid WhatsApp contact phone is required.");
+  }
 
   const contact = await Contact.findOneAndUpdate(
-    { businessId, waId },
+    { businessId, waId: normalizedWaId },
     {
       $set: {
-        phone: phone || waId,
+        phone: normalizedPhone || normalizedWaId,
         lastMessageAt: now,
         ...(profileName ? { name: profileName } : {}),
       },
-      $setOnInsert: { businessId, waId },
+      $setOnInsert: { businessId, waId: normalizedWaId },
     },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   );
