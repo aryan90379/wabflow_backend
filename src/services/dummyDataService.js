@@ -56,6 +56,7 @@ export async function generateDummyData(user) {
       member = await BusinessMember.create({
         businessId: business._id,
         userId: user._id,
+        memberType: "owner",
         role: "owner",
         status: "active",
         name: user.name || "Apple Reviewer",
