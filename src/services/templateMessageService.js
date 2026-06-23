@@ -14,6 +14,7 @@ export async function sendApprovedTemplateMessage({
   templateId,
   phone,
   customerName = "",
+  templateVariables = [],
 }) {
   const template = await WhatsappMessageTemplate.findOne({
     _id: templateId,
@@ -53,6 +54,12 @@ export async function sendApprovedTemplateMessage({
     profileName: customerName,
   });
 
+  const renderedText = templateVariables.length
+    ? templateVariables.reduce((text, value, index) => (
+        text.replace(new RegExp(`\\{\\{\\s*${index + 1}\\s*\\}\\}`, "g"), String(value ?? ""))
+      ), template.body)
+    : template.body;
+
   const temporaryMessage = await Message.create({
     businessId,
     conversationId: conversation._id,
@@ -61,7 +68,7 @@ export async function sendApprovedTemplateMessage({
     direction: "outbound",
     senderType: "bot",
     type: template.buttons?.length ? "button" : "text",
-    text: template.body,
+    text: renderedText,
     status: "queued",
   });
 
@@ -74,7 +81,7 @@ export async function sendApprovedTemplateMessage({
   await temporaryMessage.save();
 
   try {
-    const result = await sendWhatsappTemplatePayload(account._id, phone, template);
+    const result = await sendWhatsappTemplatePayload(account._id, phone, template, templateVariables);
     temporaryMessage.whatsappMessageId = result?.messages?.[0]?.id || null;
     await temporaryMessage.save();
 

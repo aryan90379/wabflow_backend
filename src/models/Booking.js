@@ -1,5 +1,26 @@
 import mongoose from "mongoose";
 
+const bookingReminderSchema = new mongoose.Schema(
+  {
+    key: { type: String, required: true },
+    leadTimeMinutes: { type: Number, required: true, default: 1440 },
+    scheduledFor: { type: Date, default: null, index: true },
+    status: {
+      type: String,
+      enum: ["queued", "processing", "sent", "failed", "skipped", "cancelled"],
+      default: "queued",
+      index: true,
+    },
+    templateId: { type: mongoose.Schema.Types.ObjectId, ref: "WhatsappMessageTemplate", default: null },
+    phone: { type: String, default: "" },
+    sentAt: { type: Date, default: null },
+    messageId: { type: mongoose.Schema.Types.ObjectId, ref: "Message", default: null },
+    whatsappMessageId: { type: String, default: "" },
+    error: { type: String, default: "" },
+  },
+  { _id: false }
+);
+
 const bookingSchema = new mongoose.Schema(
   {
     businessId: { type: mongoose.Schema.Types.ObjectId, ref: "Business", required: true, index: true },
@@ -25,6 +46,7 @@ const bookingSchema = new mongoose.Schema(
     customerName: { type: String, default: "" },
     customerPhone: { type: String, default: "" },
     notes: { type: String, default: "" },
+    reminders: { type: [bookingReminderSchema], default: [] },
     updatedByMemberId: { type: mongoose.Schema.Types.ObjectId, ref: "BusinessMember", default: null },
     updatedByName: { type: String, default: "" },
     metadata: { type: Map, of: mongoose.Schema.Types.Mixed, default: {} },
@@ -33,5 +55,6 @@ const bookingSchema = new mongoose.Schema(
 );
 
 bookingSchema.index({ businessId: 1, status: 1, createdAt: -1 });
+bookingSchema.index({ "reminders.status": 1, "reminders.scheduledFor": 1 });
 
 export const Booking = mongoose.models.Booking || mongoose.model("Booking", bookingSchema);

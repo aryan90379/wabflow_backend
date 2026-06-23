@@ -6,6 +6,8 @@ import { initSocket } from "./services/socketService.js";
 import { initRawChatSocket } from "./services/rawChatSocketService.js";
 import { notificationQueue, notificationWorker } from "./workers/notificationWorker.js";
 import { broadcastQueue, broadcastWorker } from "./workers/broadcastWorker.js";
+import { bookingReminderQueue } from "./workers/bookingReminderQueue.js";
+import { bookingReminderWorker } from "./workers/bookingReminderWorker.js";
 
 async function start() {
   await connectDatabase();
@@ -28,6 +30,8 @@ async function start() {
     await notificationQueue.close();
     await broadcastWorker.close();
     await broadcastQueue.close();
+    await bookingReminderWorker.close();
+    await bookingReminderQueue.close();
 
     server.close(() => process.exit(0));
   };

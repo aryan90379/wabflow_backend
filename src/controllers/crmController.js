@@ -8,6 +8,7 @@ import {
   BotDecisionLog,
 } from "../models/index.js";
 import { broadcastToBusiness } from "../services/socketService.js";
+import { prepareBookingReminders } from "../services/bookingReminderService.js";
 
 function pagination(req) {
   const page = Math.max(1, Number(req.query.page || 1));
@@ -196,6 +197,7 @@ export async function updateBooking(req, res) {
     { new: true, runValidators: true }
   );
   if (!booking) return res.status(404).json({ success: false, error: "Booking not found." });
+  await prepareBookingReminders(booking);
   broadcastToBusiness(req.business._id.toString(), "booking_updated", booking);
   return res.json({ success: true, booking, data: booking });
 }
@@ -208,6 +210,7 @@ export async function createBooking(req, res) {
     ...data,
     businessId: req.business._id,
   });
+  await prepareBookingReminders(booking);
   
   broadcastToBusiness(req.business._id.toString(), "booking_created", booking);
   return res.status(201).json({ success: true, booking, data: booking });

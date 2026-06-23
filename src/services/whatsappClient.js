@@ -144,10 +144,37 @@ export async function sendWhatsappPayload(
 export async function sendWhatsappTemplatePayload(
   accountId,
   to,
-  template
+  template,
+  bodyParameters = []
 ) {
   if (!template?.name) {
     throw new Error("WhatsApp template name is required.");
+  }
+
+  const components = [];
+
+  if (template.headerType === "IMAGE" && template.headerImageUrl) {
+    components.push({
+      type: "header",
+      parameters: [
+        {
+          type: "image",
+          image: {
+            link: template.headerImageUrl,
+          },
+        },
+      ],
+    });
+  }
+
+  if (bodyParameters.length) {
+    components.push({
+      type: "body",
+      parameters: bodyParameters.map((value) => ({
+        type: "text",
+        text: String(value ?? ""),
+      })),
+    });
   }
 
   return sendWhatsappPayload(accountId, {
@@ -158,23 +185,7 @@ export async function sendWhatsappTemplatePayload(
       language: {
         code: template.language || "en_US",
       },
-      ...(template.headerType === "IMAGE" && template.headerImageUrl
-        ? {
-            components: [
-              {
-                type: "header",
-                parameters: [
-                  {
-                    type: "image",
-                    image: {
-                      link: template.headerImageUrl,
-                    },
-                  },
-                ],
-              },
-            ],
-          }
-        : {}),
+      ...(components.length ? { components } : {}),
     },
   });
 }
