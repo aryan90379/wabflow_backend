@@ -172,10 +172,13 @@ export async function generateDummyData(user) {
         contactId: contacts[0]._id,
         whatsappAccountId: waAccount._id,
         direction: "outbound",
+        senderType: "owner",
         status: "read",
         type: "text",
         text: "Hi John, confirming your appointment for tomorrow.",
         createdAt: new Date(now.getTime() - 60000),
+        serverSequence: 1,
+        clientMessageId: "msg_1",
       },
       {
         businessId: business._id,
@@ -183,10 +186,13 @@ export async function generateDummyData(user) {
         contactId: contacts[0]._id,
         whatsappAccountId: waAccount._id,
         direction: "inbound",
+        senderType: "customer",
         status: "received",
         type: "text",
         text: "Sure, see you tomorrow!",
         createdAt: new Date(now.getTime() - 5000),
+        serverSequence: 2,
+        clientMessageId: "msg_2",
       }
     ]);
 
@@ -207,10 +213,13 @@ export async function generateDummyData(user) {
         contactId: contacts[1]._id,
         whatsappAccountId: waAccount._id,
         direction: "inbound",
+        senderType: "customer",
         status: "received",
         type: "text",
         text: "What are your prices?",
         createdAt: new Date(now.getTime() - 3600000),
+        serverSequence: 1,
+        clientMessageId: "msg_3",
       }
     ]);
 
