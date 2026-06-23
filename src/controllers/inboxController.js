@@ -492,7 +492,15 @@ export async function listMessages(req, res) {
     .limit(limit);
 
   const data = messages.reverse();
-  return res.json({ success: true, messages: data, data, total: data.length, page: 1, limit });
+  return res.json({
+    success: true,
+    messages: data,
+    data,
+    total: data.length,
+    page: 1,
+    limit,
+    hasMore: messages.length === limit,
+  });
 }
 
 export async function sendHumanMessage(req, res) {
