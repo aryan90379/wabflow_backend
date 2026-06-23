@@ -69,11 +69,14 @@ export async function generateDummyData(user) {
       phoneNumberId: "987654321098765",
       displayPhoneNumber: "+1 555-0100",
       verifiedName: "Premium Spa & Salon",
-      qualityRating: "GREEN",
-      status: "CONNECTED",
-      messagingLimit: "1K",
+      profileDisplayName: "Premium Spa & Salon",
+      status: "active",
       hasPaymentMethod: true,
       hasPaymentMethodCheckedAt: new Date(),
+      encryptedValue: "dummy_encrypted_value",
+      encryptionIv: "dummy_iv",
+      encryptionTag: "dummy_tag",
+      tokenType: "system_user",
     });
 
     // 3. Generate Contacts
