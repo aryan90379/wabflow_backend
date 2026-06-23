@@ -27,7 +27,7 @@ export const createList = async (req, res) => {
 
     const newList = new ListGroup({
       businessId,
-      name,
+      name: name || 'Untitled List',
       description,
     });
 
