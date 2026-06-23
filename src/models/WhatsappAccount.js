@@ -45,6 +45,8 @@ const whatsappAccountSchema = new mongoose.Schema(
       default: "active",
       index: true,
     },
+    hasPaymentMethod: { type: Boolean, default: null },
+    hasPaymentMethodCheckedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

@@ -214,6 +214,49 @@ function consumeOfficialDisplayNameChangeSlot(account, requestedName) {
   account.officialDisplayNameRequested = requestedName;
 }
 
+/**
+ * Checks whether the WABA (WhatsApp Business Account) associated with this
+ * WhatsApp account has a payment method attached in Meta Business Manager.
+ *
+ * Meta's Graph API exposes this via:
+ *   GET /{waba-id}?fields=payment_method_attached
+ *
+ * We cache the result on the account document for 6 hours to avoid
+ * making redundant API calls on every list request.
+ */
+async function checkWabaPaymentMethod(account, accessToken) {
+  // Cache: skip if checked within the last 6 hours
+  const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
+  const lastChecked = account.hasPaymentMethodCheckedAt;
+  if (lastChecked && Date.now() - lastChecked.getTime() < SIX_HOURS_MS) {
+    return; // Already fresh — skip the API call
+  }
+
+  if (!account.wabaId) return;
+
+  try {
+    const wabaData = await graphGet(
+      `/${account.wabaId}`,
+      accessToken,
+      { fields: "id,payment_method_attached" },
+      "Check WABA payment method"
+    );
+
+    // Meta returns payment_method_attached: true|false
+    const hasPayment = wabaData?.payment_method_attached;
+    account.hasPaymentMethod = typeof hasPayment === "boolean" ? hasPayment : null;
+    account.hasPaymentMethodCheckedAt = new Date();
+  } catch (error) {
+    // Non-fatal: if the token doesn't have ads_management scope or similar
+    // we just leave hasPaymentMethod as its last known value
+    console.warn("[wa-payment] Could not check WABA payment method", {
+      accountId: String(account._id),
+      wabaId: account.wabaId,
+      error: error.message,
+    });
+  }
+}
+
 async function refreshWhatsappAccountIdentity(account) {
   if (!account || account.status !== "active") {
     return account;
@@ -242,6 +285,9 @@ async function refreshWhatsappAccountIdentity(account) {
     account.officialDisplayNameLastSyncedAt = new Date();
 
     syncOfficialDisplayNameRequest(account);
+
+    // Check payment method (cached for 6 h — non-fatal)
+    await checkWabaPaymentMethod(account, accessToken);
 
     await account.save();
   } catch (error) {
