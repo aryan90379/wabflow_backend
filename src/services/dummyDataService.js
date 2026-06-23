@@ -63,10 +63,11 @@ export async function generateDummyData(user) {
     }
 
     // 2. Generate WhatsApp Account
+    const uniqueSuffix = business._id.toString().slice(-10);
     const waAccount = await WhatsappAccount.create({
       businessId: business._id,
-      wabaId: "123456789012345",
-      phoneNumberId: "987654321098765",
+      wabaId: `12345${uniqueSuffix}`,
+      phoneNumberId: `98765${uniqueSuffix}`,
       displayPhoneNumber: "+1 555-0100",
       verifiedName: "Premium Spa & Salon",
       profileDisplayName: "Premium Spa & Salon",
