@@ -159,6 +159,25 @@ async function uploadTemplateHeaderImageHandle(imageUrl, accessToken) {
   });
 }
 
+function getBodyVariableExamples(body = "") {
+  const variables = [...String(body).matchAll(/\{\{(\d+)\}\}/g)]
+    .map((match) => Number(match[1]))
+    .filter((value) => Number.isInteger(value) && value > 0);
+
+  if (variables.length === 0) return null;
+
+  const maxVariable = Math.max(...variables);
+  const defaults = [
+    "Jane Doe",
+    "follow-up visit",
+    "Care Clinic",
+    "24 June 2026",
+    "10:30 AM",
+  ];
+
+  return Array.from({ length: maxVariable }, (_, index) => defaults[index] || `Sample ${index + 1}`);
+}
+
 function buildMetaTemplateComponents({ body, footer, buttons, headerType, headerImageHandle }) {
   const components = [];
 
@@ -172,10 +191,17 @@ function buildMetaTemplateComponents({ body, footer, buttons, headerType, header
     });
   }
 
-  components.push({
+  const bodyComponent = {
     type: "BODY",
     text: body,
-  });
+  };
+  const bodyExamples = getBodyVariableExamples(body);
+  if (bodyExamples) {
+    bodyComponent.example = {
+      body_text: [bodyExamples],
+    };
+  }
+  components.push(bodyComponent);
 
   if (footer) {
     components.push({
@@ -347,6 +373,9 @@ export async function createWhatsappMessageTemplate(req, res) {
   const buttons = sanitizeButtons(req.body.buttons);
   const headerType = req.body.headerType === "IMAGE" ? "IMAGE" : "NONE";
   const headerImageUrl = String(req.body.headerImageUrl || "").trim();
+  const category = String(req.body.category || "MARKETING").toUpperCase() === "UTILITY"
+    ? "UTILITY"
+    : "MARKETING";
 
   if (!body) {
     return res.status(400).json({ success: false, error: "Template message body is required." });
@@ -374,7 +403,7 @@ export async function createWhatsappMessageTemplate(req, res) {
       },
       body: JSON.stringify({
         name,
-        category: "MARKETING",
+        category,
         language: req.body.language || "en_US",
         components,
       }),
@@ -390,7 +419,7 @@ export async function createWhatsappMessageTemplate(req, res) {
         wabaId: account.wabaId,
         metaTemplateId: result.id || result.template_id || "",
         displayName,
-        category: "MARKETING",
+        category,
         language: req.body.language || "en_US",
         body,
         footer,
