@@ -158,14 +158,20 @@ export async function demoLogin(req, res) {
     return res.status(401).json({ success: false, error: "Invalid demo credentials." });
   }
 
-  const user = await User.findOne({
+  let user = await User.findOne({
     $or: [
       { email: DEMO_EMAIL },
       { googleEmail: DEMO_EMAIL },
     ],
   });
+  
   if (!user) {
-    return res.status(404).json({ success: false, error: "Demo account not found. Please contact support." });
+    console.log("Demo user not found, creating a new one automatically...");
+    user = await User.create({
+      email: DEMO_EMAIL,
+      name: "Apple Reviewer",
+      lastLoginAt: new Date(),
+    });
   }
 
   // Generate clean dummy data for this user
