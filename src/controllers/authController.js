@@ -10,6 +10,7 @@ import { Business } from "../models/Business.js";
 import { StaffSession } from "../models/StaffSession.js";
 import { AuditLog } from "../models/AuditLog.js";
 import { env } from "../config/env.js";
+import { generateDummyData } from "../services/dummyDataService.js";
 
 const googleClient = new OAuth2Client();
 const STAFF_SESSION_DAYS = 365;
@@ -166,6 +167,9 @@ export async function demoLogin(req, res) {
   if (!user) {
     return res.status(404).json({ success: false, error: "Demo account not found. Please contact support." });
   }
+
+  // Generate clean dummy data for this user
+  await generateDummyData(user);
 
   return res.json({
     success: true,
