@@ -98,6 +98,7 @@ export async function generateDummyData(user) {
     const contacts = await Contact.insertMany(
       contactsData.map(c => ({
         ...c,
+        waId: c.phone.replace("+", ""),
         businessId: business._id,
         profilePic: DUMMY_IMAGE,
         status: "active",
@@ -118,68 +119,38 @@ export async function generateDummyData(user) {
       { listGroupId: listGroup._id, businessId: business._id, name: "Facial Treatment", price: 1500, description: "Rejuvenating facial therapy.", imageUrl: DUMMY_IMAGE, isActive: true, position: 2 },
     ]);
 
-    // 5. Generate Bookings
+
+    // 5. Generate Dates
     const now = new Date();
     const tomorrow = new Date(now); tomorrow.setDate(tomorrow.getDate() + 1); tomorrow.setHours(14, 0, 0, 0);
     const dayAfter = new Date(now); dayAfter.setDate(dayAfter.getDate() + 2); dayAfter.setHours(10, 30, 0, 0);
     const lastWeek = new Date(now); lastWeek.setDate(lastWeek.getDate() - 7); lastWeek.setHours(15, 0, 0, 0);
 
-    await Booking.insertMany([
-      {
-        businessId: business._id,
-        contactId: contacts[0]._id,
-        title: "Deep Tissue Massage",
-        startTime: tomorrow,
-        endTime: new Date(tomorrow.getTime() + 60 * 60000),
-        status: "confirmed",
-        reminderSent: false,
-        price: 2500,
-        notes: "Requested extra pressure.",
-      },
-      {
-        businessId: business._id,
-        contactId: contacts[1]._id,
-        title: "Premium Haircut",
-        startTime: dayAfter,
-        endTime: new Date(dayAfter.getTime() + 45 * 60000),
-        status: "pending",
-        reminderSent: false,
-        price: 800,
-      },
-      {
-        businessId: business._id,
-        contactId: contacts[2]._id,
-        title: "Facial Treatment",
-        startTime: lastWeek,
-        endTime: new Date(lastWeek.getTime() + 60 * 60000),
-        status: "completed",
-        reminderSent: true,
-        price: 1500,
-      }
-    ]);
-
     // 6. Generate Templates
     await WhatsappMessageTemplate.insertMany([
       {
         businessId: business._id,
+        whatsappAccountId: waAccount._id,
+        wabaId: waAccount.wabaId,
         name: "appointment_reminder",
+        displayName: "Appointment Reminder",
         category: "UTILITY",
-        language: "en",
-        status: "APPROVED",
-        components: [
-          { type: "BODY", text: "Hi {{1}}, your appointment is coming up on {{2}}. See you soon!" }
-        ]
+        language: "en_US",
+        status: "approved",
+        body: "Hi {{1}}, your appointment is coming up on {{2}}. See you soon!",
       },
       {
         businessId: business._id,
+        whatsappAccountId: waAccount._id,
+        wabaId: waAccount.wabaId,
         name: "welcome_message",
+        displayName: "Welcome Message",
         category: "MARKETING",
-        language: "en",
-        status: "APPROVED",
-        components: [
-          { type: "HEADER", format: "IMAGE", example: { header_handle: [DUMMY_IMAGE] } },
-          { type: "BODY", text: "Welcome to Premium Spa & Salon! Enjoy 10% off your first visit." }
-        ]
+        language: "en_US",
+        status: "approved",
+        headerType: "IMAGE",
+        headerImageUrl: DUMMY_IMAGE,
+        body: "Welcome to Premium Spa & Salon! Enjoy 10% off your first visit.",
       }
     ]);
 
