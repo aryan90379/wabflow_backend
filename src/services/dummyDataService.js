@@ -13,6 +13,8 @@ import { WhatsappMessageTemplate } from "../models/WhatsappMessageTemplate.js";
 import { ListGroup } from "../models/ListGroup.js";
 import { ListItem } from "../models/ListItem.js";
 import { ServiceItem } from "../models/ServiceItem.js";
+import { AutomationFlow } from "../models/AutomationFlow.js";
+import { BotKnowledge } from "../models/BotKnowledge.js";
 
 const DUMMY_IMAGE = "https://images.unsplash.com/photo-1491378630646-3440efa57c3b?fm=jpg&q=60&w=3000&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1yZWxhdGVkfDE4fHx8ZW58MHx8fHx8";
 
@@ -40,12 +42,15 @@ export async function generateDummyData(user) {
         Message.deleteMany({ businessId: business._id }),
         Booking.deleteMany({ businessId: business._id }),
         Lead.deleteMany({ businessId: business._id }),
+        Booking.deleteMany({ businessId: business._id }),
         FollowUpTask.deleteMany({ businessId: business._id }),
         WhatsappAccount.deleteMany({ businessId: business._id }),
         WhatsappMessageTemplate.deleteMany({ businessId: business._id }),
         ListGroup.deleteMany({ businessId: business._id }),
         ListItem.deleteMany({ businessId: business._id }),
         ServiceItem.deleteMany({ businessId: business._id }),
+        AutomationFlow.deleteMany({ businessId: business._id }),
+        BotKnowledge.deleteMany({ businessId: business._id }),
       ]);
       console.log("Wiped existing dummy data for business:", business._id);
     }
@@ -232,6 +237,147 @@ export async function generateDummyData(user) {
         createdAt: new Date(now.getTime() - 3600000),
       }
     ]);
+
+    // 8. Generate Leads (Inquiries)
+    await Lead.insertMany([
+      {
+        businessId: business._id,
+        contactId: contacts[0]._id,
+        conversationId: conv1._id,
+        source: "whatsapp",
+        intent: "enquiry",
+        score: 85,
+        status: "new",
+        requirement: "Looking for a couple's spa package.",
+        budget: "2500",
+        preferredDate: tomorrow.toISOString().split("T")[0],
+        preferredTime: "Evening",
+        city: "San Francisco",
+        updatedByMemberId: member._id,
+        updatedByName: member.name,
+      },
+      {
+        businessId: business._id,
+        contactId: contacts[1]._id,
+        conversationId: conv2._id,
+        source: "whatsapp",
+        intent: "pricing",
+        score: 40,
+        status: "contacted",
+        requirement: "Wants to know haircut prices.",
+        budget: null,
+      }
+    ]);
+
+    // 9. Generate Bookings
+    await Booking.insertMany([
+      {
+        businessId: business._id,
+        contactId: contacts[0]._id,
+        conversationId: conv1._id,
+        type: "appointment",
+        status: "confirmed",
+        startDate: tomorrow.toISOString().split("T")[0],
+        startTime: "10:00",
+        endTime: "11:30",
+        guests: 1,
+        customerName: contacts[0].name,
+        customerPhone: contacts[0].phone,
+        notes: "Requested deep tissue massage.",
+        updatedByMemberId: member._id,
+        updatedByName: member.name,
+      },
+      {
+        businessId: business._id,
+        contactId: contacts[1]._id,
+        conversationId: conv2._id,
+        type: "appointment",
+        status: "requested",
+        startDate: new Date(Date.now() + 86400000 * 3).toISOString().split("T")[0],
+        startTime: "14:00",
+        endTime: "15:00",
+        guests: 1,
+        customerName: contacts[1].name,
+        customerPhone: contacts[1].phone,
+        notes: "Haircut and styling.",
+        updatedByMemberId: member._id,
+        updatedByName: member.name,
+      }
+    ]);
+
+    // 9. Generate BotKnowledge (FAQ)
+    await BotKnowledge.insertMany([
+      {
+        businessId: business._id,
+        category: "pricing",
+        question: "How much is a deep tissue massage?",
+        answer: "Our Deep Tissue Massage is $25 for 60 minutes of deep relaxation.",
+        keywords: ["massage", "price", "deep tissue", "cost"],
+        active: true,
+      },
+      {
+        businessId: business._id,
+        category: "timing",
+        question: "What are your opening hours?",
+        answer: "We are open Monday to Saturday from 9 AM to 8 PM, and Sunday from 10 AM to 6 PM.",
+        keywords: ["hours", "open", "timing", "close"],
+        active: true,
+      }
+    ]);
+
+    // 10. Generate AutomationFlow (Bot)
+    await AutomationFlow.create({
+      businessId: business._id,
+      whatsappAccountId: waAccount._id,
+      name: "Welcome & Booking Bot",
+      description: "Automatically greets customers and offers service menus.",
+      status: "published",
+      isDefault: true,
+      version: 1,
+      trigger: {
+        type: "any_message",
+        matchMode: "any",
+      },
+      startNodeId: "node_1",
+      nodes: [
+        {
+          nodeId: "node_1",
+          type: "message",
+          name: "Welcome Message",
+          response: {
+            type: "buttons",
+            text: "Hi there! Welcome to Premium Spa & Salon. How can we help you today?",
+            buttonText: "View options",
+            options: [
+              { id: "opt_1", title: "View Services", nextNodeId: "node_2" },
+              { id: "opt_2", title: "Opening Hours", nextNodeId: "node_3" }
+            ]
+          },
+          nextNodeId: "",
+        },
+        {
+          nodeId: "node_2",
+          type: "message",
+          name: "Services Menu",
+          response: {
+            type: "text",
+            text: "We offer Haircuts, Massages, and Facials. Let me know what you'd like to book!",
+          },
+          nextNodeId: "",
+        },
+        {
+          nodeId: "node_3",
+          type: "message",
+          name: "Hours Info",
+          response: {
+            type: "text",
+            text: "We are open 9 AM to 8 PM daily.",
+          },
+          nextNodeId: "",
+        }
+      ],
+      publishedAt: new Date(),
+    });
 
     console.log("Successfully generated all dummy data for Apple Reviewer.");
   } catch (error) {
