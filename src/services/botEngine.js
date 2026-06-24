@@ -443,7 +443,13 @@ async function sendAppointmentList({ business, account, contact, conversation, m
     text += `\n📌 Status: ${statusLabel}\n`;
   }
 
-  const response = { type: "text", text: text.trim() };
+  const response = { 
+    type: "buttons", 
+    text: text.trim(), 
+    options: [
+      { id: "sys_cancel_appointment", title: "Cancel Appointment" }
+    ]
+  };
   await sendAndSaveMessage({ account, contact, conversation, response, senderType: "bot" });
   
   conversation.botState.updatedAt = new Date();
