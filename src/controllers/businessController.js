@@ -196,13 +196,19 @@ export async function updateBusiness(req, res) {
     "openingHours",
     "settings",
     "metadata",
+    "missedCallConfig",
   ];
 
   const wasOnboardingReset = Boolean(req.business.settings?.onboardingResetRequired);
   const previousType = req.business.businessType;
 
   for (const key of allowed) {
-    if (req.body[key] !== undefined) req.business.set(key, req.body[key]);
+    if (req.body[key] !== undefined) {
+      req.business.set(key, req.body[key]);
+      if (key === 'missedCallConfig' || key === 'settings' || key === 'metadata' || key === 'openingHours') {
+        req.business.markModified(key);
+      }
+    }
   }
 
   await req.business.save();
