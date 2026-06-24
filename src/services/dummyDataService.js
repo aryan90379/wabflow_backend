@@ -272,47 +272,55 @@ export async function generateDummyData(user) {
       description: "Automatically greets customers and offers service menus.",
       status: "published",
       isDefault: true,
-      version: 1,
+      version: 2,
       trigger: {
         type: "any_message",
         matchMode: "any",
       },
-      startNodeId: "node_1",
-      nodes: [
+      entryStepId: "step_1",
+      steps: [
         {
-          nodeId: "node_1",
+          id: "step_1",
           type: "message",
           name: "Welcome Message",
-          response: {
-            type: "buttons",
+          config: {
+            messageType: "buttons",
             text: "Hey! Welcome to Premium Spa & Salon. How can we help you today?\n\n(write hi to reset the flow)",
-            buttonText: "View options",
-            options: [
-              { id: "opt_1", title: "View Services", nextNodeId: "node_2" },
-              { id: "opt_2", title: "Opening Hours", nextNodeId: "node_3" }
+            buttons: [
+              {
+                id: "btn_1",
+                label: "View Services",
+                value: "View Services",
+                action: { type: "go_to_step", targetStepId: "step_2" }
+              },
+              {
+                id: "btn_2",
+                label: "Opening Hours",
+                value: "Opening Hours",
+                action: { type: "go_to_step", targetStepId: "step_3" }
+              }
             ]
-          },
-          nextNodeId: "",
+          }
         },
         {
-          nodeId: "node_2",
+          id: "step_2",
           type: "message",
           name: "Services Menu",
-          response: {
-            type: "text",
+          config: {
+            messageType: "text",
             text: "We offer Haircuts, Massages, and Facials. Let me know what you'd like to book!",
-          },
-          nextNodeId: "",
+            buttons: []
+          }
         },
         {
-          nodeId: "node_3",
+          id: "step_3",
           type: "message",
           name: "Hours Info",
-          response: {
-            type: "text",
+          config: {
+            messageType: "text",
             text: "We are open 9 AM to 8 PM daily.",
-          },
-          nextNodeId: "",
+            buttons: []
+          }
         }
       ],
       publishedAt: new Date(),
@@ -323,3 +331,4 @@ export async function generateDummyData(user) {
     console.error("Error generating dummy data:", error);
   }
 }
+

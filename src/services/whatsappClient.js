@@ -119,6 +119,16 @@ export async function sendWhatsappPayload(
     accountId
   );
 
+  // INTERCEPT DEMO ACCOUNTS
+  if (account.wabaId && account.wabaId.startsWith("12345") && accessToken === "dummy_encrypted_value") {
+    console.log("Intercepted demo account WhatsApp payload. Simulating success.");
+    return {
+      messaging_product: "whatsapp",
+      contacts: [{ input: "demo", wa_id: "demo" }],
+      messages: [{ id: `wamid.dummy_${Date.now()}` }]
+    };
+  }
+
   const response = await fetch(
     `${GRAPH_BASE}/${account.phoneNumberId}/messages`,
     {
