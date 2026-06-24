@@ -38,6 +38,10 @@ const supportTicketSchema = new mongoose.Schema(
       type: Date,
       default: Date.now,
     },
+    hasUnreadUpdates: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );

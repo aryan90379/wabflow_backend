@@ -121,6 +121,7 @@ import {
   getMessages,
   getTicket,
   listTickets,
+  getUnreadTicketStatus,
   sendMessage,
 } from "../controllers/supportController.js";
 
@@ -272,6 +273,7 @@ businessRouter.patch("/handoffs/:handoffId", requirePermission("inbox.manage"), 
 businessRouter.get("/bot-decision-logs", requirePermission("inbox.view"), asyncHandler(listDecisionLogs));
 
 businessRouter.get("/support-tickets", requirePermission("settings.view"), asyncHandler(listTickets));
+businessRouter.get("/support-tickets/unread", requirePermission("settings.view"), asyncHandler(getUnreadTicketStatus));
 businessRouter.post("/support-tickets", requirePermission("settings.edit"), asyncHandler(createTicket));
 businessRouter.get("/support-tickets/:ticketId", requirePermission("settings.view"), asyncHandler(getTicket));
 businessRouter.get("/support-tickets/:ticketId/messages", requirePermission("settings.view"), asyncHandler(getMessages));

@@ -1,4 +1,5 @@
 import { SupportTicket, SupportMessage } from "../models/index.js";
+import { broadcastToBusiness } from "../services/socketService.js";
 
 // --- User (Business) Methods ---
 
@@ -47,6 +48,13 @@ export const getTicket = async (req, res) => {
   if (!ticket) {
     return res.status(404).json({ error: "Ticket not found" });
   }
+
+  if (ticket.hasUnreadUpdates) {
+    ticket.hasUnreadUpdates = false;
+    await ticket.save();
+    broadcastToBusiness(ticket.businessId.toString(), "support_ticket_read", { ticketId: ticket._id });
+  }
+
   res.json(ticket);
 };
 
@@ -63,6 +71,12 @@ export const getMessages = async (req, res) => {
   const messages = await SupportMessage.find({ ticketId: ticket._id })
     .sort({ createdAt: 1 })
     .populate("senderId", "name email");
+
+  if (ticket.hasUnreadUpdates) {
+    ticket.hasUnreadUpdates = false;
+    await ticket.save();
+    broadcastToBusiness(ticket.businessId.toString(), "support_ticket_read", { ticketId: ticket._id });
+  }
 
   res.json(messages);
 };
@@ -91,6 +105,14 @@ export const sendMessage = async (req, res) => {
 
   await supportMessage.populate("senderId", "name email");
   res.status(201).json(supportMessage);
+};
+
+export const getUnreadTicketStatus = async (req, res) => {
+  const count = await SupportTicket.countDocuments({
+    businessId: req.business._id,
+    hasUnreadUpdates: true,
+  });
+  res.json({ hasUnread: count > 0 });
 };
 
 // --- Admin (Developer) Methods ---
@@ -126,7 +148,10 @@ export const adminUpdateTicket = async (req, res) => {
   if (status) ticket.status = status;
   if (priority) ticket.priority = priority;
 
+  ticket.hasUnreadUpdates = true;
   await ticket.save();
+  broadcastToBusiness(ticket.businessId.toString(), "support_ticket_updated", { ticketId: ticket._id });
+
   res.json(ticket);
 };
 
@@ -160,7 +185,9 @@ export const adminSendMessage = async (req, res) => {
   });
 
   ticket.lastMessageAt = new Date();
+  ticket.hasUnreadUpdates = true;
   await ticket.save();
+  broadcastToBusiness(ticket.businessId.toString(), "support_ticket_updated", { ticketId: ticket._id });
 
   await supportMessage.populate("senderId", "name email");
   res.status(201).json(supportMessage);
