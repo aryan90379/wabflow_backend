@@ -15,6 +15,7 @@ import { ListItem } from "../models/ListItem.js";
 import { ServiceItem } from "../models/ServiceItem.js";
 import { AutomationFlow } from "../models/AutomationFlow.js";
 import { BotKnowledge } from "../models/BotKnowledge.js";
+import { QrShortLink } from "../models/QrShortLink.js";
 
 const DUMMY_IMAGE = "https://images.unsplash.com/photo-1491378630646-3440efa57c3b?fm=jpg&q=60&w=3000&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1yZWxhdGVkfDE4fHx8ZW58MHx8fHx8";
 
