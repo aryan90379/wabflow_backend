@@ -406,6 +406,11 @@ function textLooksLikeAppointmentListRequest(text = "") {
   return /\b(my|view|show|see|list)\b/.test(normalized) && /\b(appointment|appointments|booking|bookings|visit|visits)\b/.test(normalized);
 }
 
+function textLooksLikeCancelAppointmentRequest(text = "") {
+  const normalized = String(text || "").toLowerCase();
+  return /\b(cancel|delete|remove|abort)\b/.test(normalized) && /\b(appointment|appointments|booking|bookings|visit|visits)\b/.test(normalized);
+}
+
 function textLooksLikeBookingRequest(text = "") {
   const normalized = String(text || "").toLowerCase();
   return /\b(book|booking|appointment|visit|reserve|schedule)\b/.test(normalized);
@@ -441,6 +446,52 @@ async function sendAppointmentList({ business, account, contact, conversation, m
   const response = { type: "text", text: text.trim() };
   await sendAndSaveMessage({ account, contact, conversation, response, senderType: "bot" });
   
+  conversation.botState.updatedAt = new Date();
+  await conversation.save();
+  return { response, appointments };
+}
+
+async function sendCancelAppointmentList({ business, account, contact, conversation, message = "Please select the appointment you wish to cancel:" }) {
+  const appointments = await Booking.find({
+    businessId: business._id,
+    contactId: contact._id,
+    type: "appointment",
+    status: { $in: ["requested", "confirmed", "scheduled", "pending"] }
+  }).sort({ createdAt: -1 }).limit(10);
+
+  if (!appointments.length) {
+    const response = { type: "text", text: "You don't have any upcoming appointments to cancel." };
+    await sendAndSaveMessage({ account, contact, conversation, response, senderType: "bot" });
+    return { response, appointments };
+  }
+
+  const options = [];
+  for (const appt of appointments) {
+    let desc = "";
+    if (appt.serviceItemId) {
+      const item = await ServiceItem.findById(appt.serviceItemId);
+      if (item) desc = `Reason: ${item.name}`;
+    } else if (appt.metadata?.get("appointmentReason")) {
+      desc = `Reason: ${appt.metadata.get("appointmentReason")}`;
+    } else {
+      desc = `Status: ${appt.status.toUpperCase()}`;
+    }
+
+    options.push({
+      id: `cancel_appt_${appt._id}`,
+      title: `${appt.startDate || 'TBD'} at ${appt.startTime || 'TBD'}`.slice(0, 24),
+      description: desc.slice(0, 72)
+    });
+  }
+
+  const response = {
+    type: "list",
+    text: message,
+    buttonText: "Select Appointment",
+    options
+  };
+
+  await sendAndSaveMessage({ account, contact, conversation, response, senderType: "bot" });
   conversation.botState.updatedAt = new Date();
   await conversation.save();
   return { response, appointments };
@@ -836,6 +887,60 @@ export async function processIncomingMessage(event) {
         reply: response.text,
         metadata: { appointmentList: true },
       });
+      return;
+    }
+
+    if (event.selectionId === "sys_cancel_appointment" || (!event.selectionId && textLooksLikeCancelAppointmentRequest(event.text || ""))) {
+      const { response } = await sendCancelAppointmentList({
+        business,
+        account,
+        contact,
+        conversation,
+        message: "Please select the appointment you wish to cancel:",
+      });
+
+      await writeDecision({
+        businessId: business._id,
+        conversationId: conversation._id,
+        messageId: inboundMessage._id,
+        intent: "cancel_booking_request",
+        confidence: 1,
+        actionTaken: "sent_reply",
+        reply: response.text || "List sent",
+        metadata: { cancelAppointmentList: true },
+      });
+      return;
+    }
+
+    if (event.selectionId?.startsWith("cancel_appt_")) {
+      const bookingId = event.selectionId.slice("cancel_appt_".length);
+      const booking = await Booking.findOne({
+        _id: bookingId,
+        businessId: business._id,
+        contactId: contact._id,
+      });
+
+      if (booking) {
+        booking.status = "cancelled";
+        await booking.save();
+
+        const response = { type: "text", text: `Your appointment for ${booking.startDate || 'TBD'} at ${booking.startTime || 'TBD'} has been successfully cancelled.` };
+        await sendAndSaveMessage({ account, contact, conversation, response, senderType: "bot" });
+
+        await writeDecision({
+          businessId: business._id,
+          conversationId: conversation._id,
+          messageId: inboundMessage._id,
+          intent: "cancel_booking",
+          confidence: 1,
+          actionTaken: "cancelled_booking",
+          reply: response.text,
+          metadata: { bookingId },
+        });
+      } else {
+        const response = { type: "text", text: "Sorry, I couldn't find that appointment. It might have already been cancelled." };
+        await sendAndSaveMessage({ account, contact, conversation, response, senderType: "bot" });
+      }
       return;
     }
 
