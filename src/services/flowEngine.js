@@ -870,6 +870,11 @@ export async function continueFlowV2({ flow, business, account, contact, convers
           title: "My Appointments",
           description: "View your upcoming visits"
         });
+        responseOptions.push({
+          id: "sys_cancel_appointment",
+          title: "Cancel Appointment",
+          description: "Cancel an upcoming visit"
+        });
       }
 
       let responseText = config.text;
