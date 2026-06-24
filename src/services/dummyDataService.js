@@ -88,6 +88,21 @@ export async function generateDummyData(user) {
       });
     }
 
+    // 2.5 Generate QR Short Link
+    const QrShortLink = mongoose.models.QrShortLink || mongoose.model("QrShortLink");
+    let qrLink = await QrShortLink.findOne({ businessId: business._id });
+    if (!qrLink) {
+      qrLink = await QrShortLink.create({
+        businessId: business._id,
+        whatsappAccountId: waAccount._id,
+        slug: `spa${uniqueSuffix.slice(-4)}`,
+        title: "Premium Spa & Salon Bot QR",
+        phoneNumber: "15550100",
+        starterMessage: "Hi, I would like to know more.",
+        active: true,
+      });
+    }
+
     // 3. Generate Dense Contacts (15+ Contacts)
     const firstNames = ["John", "Alice", "Bob", "Emma", "Michael", "Sarah", "David", "Laura", "James", "Sophia", "Oliver", "Isabella", "William", "Mia", "Lucas", "Charlotte"];
     const lastNames = ["Doe", "Smith", "Johnson", "Davis", "Brown", "Miller", "Wilson", "Moore", "Taylor", "Anderson", "Thomas", "Jackson", "White", "Harris", "Martin", "Thompson"];
