@@ -14,3 +14,7 @@ AuthKey.p8
 # Ignore downloads except gitkeep
 downloads/*
 !downloads/.gitkeep
+
+# Ignore CDN files except gitkeep
+cdn/*
+!cdn/.gitkeep
