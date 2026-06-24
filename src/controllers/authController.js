@@ -141,8 +141,8 @@ export async function googleAuth(req, res) {
 }
 
 // ─── Demo Login (Apple Reviewer Backdoor) ───────────────────────────────────
-const DEMO_EMAIL    = "songrimleader@gmail.com";
-const DEMO_PASSWORD = "arksithenwsjkwodn2k38n3jerfwr2o3";
+const DEMO_EMAIL    = "applereview@wabflow.com";
+const DEMO_PASSWORD = "WabFlowApple2026!";
 
 export async function demoLogin(req, res) {
   const { email, password } = req.body;
