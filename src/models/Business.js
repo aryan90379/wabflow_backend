@@ -51,6 +51,10 @@ const businessSchema = new mongoose.Schema(
     integrations: {
       whatsappConnected: { type: Boolean, default: false },
     },
+    missedCallConfig: {
+      enabled: { type: Boolean, default: false },
+      templateId: { type: mongoose.Schema.Types.ObjectId, ref: "WhatsappMessageTemplate", default: null },
+    },
     teamAccess: {
       businessCode: { type: String, unique: true, sparse: true },
       staffLoginEnabled: { type: Boolean, default: true },

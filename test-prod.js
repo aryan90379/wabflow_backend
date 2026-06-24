@@ -13,21 +13,23 @@ async function test() {
     });
     
     const businessId = getBusinesses.data.businesses[0]._id;
+    console.log("Logged in. Business ID:", businessId);
 
-    const getLinks = await axios.get(`https://api.wabflow.synqra.in/api/businesses/${businessId}/qr-links`, {
+    const getAccounts = await axios.get(`https://api.wabflow.synqra.in/api/businesses/${businessId}/whatsapp/accounts`, {
       headers: { Authorization: `Bearer ${token}` }
     });
-    
-    const linkId = getLinks.data.data[0].id;
+    const waAccountId = getAccounts.data.accounts[0]._id;
 
-    console.log("UPDATING LINK...");
-    const updateRes = await axios.patch(`https://api.wabflow.synqra.in/api/businesses/${businessId}/qr-links/${linkId}`, {
-      phoneNumber: "+1 555-0100"
+    console.log("CREATING LINK...");
+    const createRes = await axios.post(`https://api.wabflow.synqra.in/api/businesses/${businessId}/qr-links`, {
+      whatsappAccountId: waAccountId,
+      title: "Test QR",
+      phoneNumber: "+15550100"
     }, {
       headers: { Authorization: `Bearer ${token}` }
     });
-    
-    console.log(JSON.stringify(updateRes.data, null, 2));
+    console.log("CREATE LINK SUCCESS:");
+    console.log(JSON.stringify(createRes.data, null, 2));
 
   } catch (err) {
     console.error(err.response ? err.response.data : err.message);

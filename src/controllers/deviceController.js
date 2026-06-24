@@ -116,3 +116,59 @@ export const registerPushToken = async (req, res) => {
     res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
+import { WhatsappMessageTemplate, Message } from "../models/index.js";
+import { sendApprovedTemplateMessage } from "../services/templateMessageService.js";
+
+export const handleMissedCall = async (req, res) => {
+  try {
+    const { phoneNumber, businessId } = req.body;
+    if (!phoneNumber || !businessId) {
+      return res.status(400).json({ success: false, message: "Missing required fields" });
+    }
+
+    const business = await Business.findById(businessId);
+    if (!business) {
+      return res.status(404).json({ success: false, message: "Business not found" });
+    }
+
+    if (!business.missedCallConfig || !business.missedCallConfig.enabled || !business.missedCallConfig.templateId) {
+      return res.status(200).json({ success: true, message: "Missed call tracking disabled or no template configured." });
+    }
+
+    const template = await WhatsappMessageTemplate.findOne({
+      _id: business.missedCallConfig.templateId,
+      businessId: business._id,
+      status: "approved"
+    });
+
+    if (!template) {
+      return res.status(400).json({ success: false, message: "Configured template is not approved or not found." });
+    }
+
+    const phone = phoneNumber.replace(/[^\d]/g, "");
+    
+    // Simple rate limiting: don't send if we sent a template to this number in the last 12 hours.
+    const recentMessage = await Message.findOne({
+      businessId: business._id,
+      "recipient.phone": phone,
+      senderType: "bot", // Template messages are typically bot
+      createdAt: { $gte: new Date(Date.now() - 12 * 60 * 60 * 1000) }
+    });
+
+    if (recentMessage) {
+      return res.status(200).json({ success: true, message: "Skipped to avoid spamming the caller." });
+    }
+
+    const { message, conversation } = await sendApprovedTemplateMessage({
+      businessId: business._id,
+      templateId: template._id,
+      phone,
+      customerName: "Missed Caller",
+    });
+
+    return res.status(200).json({ success: true, message: "Template sent successfully." });
+  } catch (error) {
+    console.error("[DeviceController] Error handling missed call:", error);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
