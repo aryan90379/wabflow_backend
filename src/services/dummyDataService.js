@@ -44,7 +44,6 @@ export async function generateDummyData(user) {
         Lead.deleteMany({ businessId: business._id }),
         Booking.deleteMany({ businessId: business._id }),
         FollowUpTask.deleteMany({ businessId: business._id }),
-        WhatsappAccount.deleteMany({ businessId: business._id }),
         WhatsappMessageTemplate.deleteMany({ businessId: business._id }),
         ListGroup.deleteMany({ businessId: business._id }),
         ListItem.deleteMany({ businessId: business._id }),
@@ -70,21 +69,24 @@ export async function generateDummyData(user) {
 
     // 2. Generate WhatsApp Account
     const uniqueSuffix = business._id.toString().slice(-10);
-    const waAccount = await WhatsappAccount.create({
-      businessId: business._id,
-      wabaId: `12345${uniqueSuffix}`,
-      phoneNumberId: `98765${uniqueSuffix}`,
-      displayPhoneNumber: "+1 555-0100",
-      verifiedName: "Premium Spa & Salon",
-      profileDisplayName: "Premium Spa & Salon",
-      status: "active",
-      hasPaymentMethod: true,
-      hasPaymentMethodCheckedAt: new Date(),
-      encryptedValue: "dummy_encrypted_value",
-      encryptionIv: "dummy_iv",
-      encryptionTag: "dummy_tag",
-      tokenType: "system_user",
-    });
+    let waAccount = await WhatsappAccount.findOne({ businessId: business._id });
+    if (!waAccount) {
+      waAccount = await WhatsappAccount.create({
+        businessId: business._id,
+        wabaId: `12345${uniqueSuffix}`,
+        phoneNumberId: `98765${uniqueSuffix}`,
+        displayPhoneNumber: "+1 555-0100",
+        verifiedName: "Premium Spa & Salon",
+        profileDisplayName: "Premium Spa & Salon",
+        status: "active",
+        hasPaymentMethod: true,
+        hasPaymentMethodCheckedAt: new Date(),
+        encryptedValue: "dummy_encrypted_value",
+        encryptionIv: "dummy_iv",
+        encryptionTag: "dummy_tag",
+        tokenType: "system_user",
+      });
+    }
 
     // 3. Generate Dense Contacts (15+ Contacts)
     const firstNames = ["John", "Alice", "Bob", "Emma", "Michael", "Sarah", "David", "Laura", "James", "Sophia", "Oliver", "Isabella", "William", "Mia", "Lucas", "Charlotte"];
