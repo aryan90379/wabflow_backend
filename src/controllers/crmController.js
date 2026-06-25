@@ -103,6 +103,17 @@ async function backfillBookingsFromFlowReplies(businessId) {
       }
     }
 
+    const customFields = [];
+    Object.keys(responseJson).forEach(key => {
+      if (key.startsWith('custom_')) {
+        customFields.push({
+          name: key,
+          question: `Custom Field ${parseInt(key.replace('custom_', '')) + 1}`,
+          value: String(responseJson[key])
+        });
+      }
+    });
+
     await Booking.create({
       businessId,
       contactId: message.contactId,
@@ -115,6 +126,7 @@ async function backfillBookingsFromFlowReplies(businessId) {
       startDate: responseJson.startDate || "",
       startTime: responseJson.startTime || "",
       notes: responseJson.notes || "",
+      customFields,
       metadata: new Map([
         ...(selectedItemName ? [[selectedItemType === "room" ? "roomType" : "appointmentReason", selectedItemName]] : []),
         ...(!serviceItemId && rawServiceItemId ? [["appointmentReason", String(responseJson.appointmentReason || rawServiceItemId)]] : []),
