@@ -142,6 +142,7 @@ export async function googleAuth(req, res) {
 
 // ─── Demo Login (Apple Reviewer Backdoor) ───────────────────────────────────
 const DEMO_EMAIL    = "applereview@wabflow.com";
+const EXPIRED_DEMO_EMAIL = "expired@wabflow.com";
 const DEMO_PASSWORD = "WabFlowApple2026!";
 
 export async function demoLogin(req, res) {
@@ -151,31 +152,33 @@ export async function demoLogin(req, res) {
     return res.status(400).json({ success: false, error: "Email and password are required." });
   }
 
-  if (
-    String(email).toLowerCase().trim() !== DEMO_EMAIL ||
-    password !== DEMO_PASSWORD
-  ) {
+  const isNormalDemo = String(email).toLowerCase().trim() === DEMO_EMAIL && password === DEMO_PASSWORD;
+  const isExpiredDemo = String(email).toLowerCase().trim() === EXPIRED_DEMO_EMAIL && password === DEMO_PASSWORD;
+
+  if (!isNormalDemo && !isExpiredDemo) {
     return res.status(401).json({ success: false, error: "Invalid demo credentials." });
   }
 
+  const targetEmail = isExpiredDemo ? EXPIRED_DEMO_EMAIL : DEMO_EMAIL;
+
   let user = await User.findOne({
     $or: [
-      { email: DEMO_EMAIL },
-      { googleEmail: DEMO_EMAIL },
+      { email: targetEmail },
+      { googleEmail: targetEmail },
     ],
   });
   
   if (!user) {
     console.log("Demo user not found, creating a new one automatically...");
     user = await User.create({
-      email: DEMO_EMAIL,
-      name: "Apple Reviewer",
+      email: targetEmail,
+      name: isExpiredDemo ? "Expired Tester" : "Apple Reviewer",
       lastLoginAt: new Date(),
     });
   }
 
   // Generate clean dummy data for this user
-  await generateDummyData(user);
+  await generateDummyData(user, { isExpired: isExpiredDemo });
 
   return res.json({
     success: true,

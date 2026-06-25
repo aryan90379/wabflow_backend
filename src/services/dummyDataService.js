@@ -19,7 +19,8 @@ import { QrShortLink } from "../models/QrShortLink.js";
 
 const DUMMY_IMAGE = "https://images.unsplash.com/photo-1491378630646-3440efa57c3b?fm=jpg&q=60&w=3000&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1yZWxhdGVkfDE4fHx8ZW58MHx8fHx8";
 
-export async function generateDummyData(user) {
+export async function generateDummyData(user, options = {}) {
+  const isExpired = options.isExpired || false;
   try {
     console.log("Generating dummy data for user:", user._id);
 
@@ -32,7 +33,9 @@ export async function generateDummyData(user) {
         timezone: "Asia/Kolkata",
         currency: "INR",
         active: true,
-        trialEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+        trialEndsAt: isExpired 
+          ? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) 
+          : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
       });
       console.log("Created demo business:", business._id);
     } else {
@@ -52,6 +55,14 @@ export async function generateDummyData(user) {
         AutomationFlow.deleteMany({ businessId: business._id }),
         BotKnowledge.deleteMany({ businessId: business._id }),
       ]);
+      
+      // Update trial status based on options
+      business.trialEndsAt = isExpired 
+          ? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) 
+          : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      business.subscription = undefined;
+      await business.save();
+      
       console.log("Wiped existing dummy data for business:", business._id);
     }
 

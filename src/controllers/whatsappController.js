@@ -225,11 +225,20 @@ function consumeOfficialDisplayNameChangeSlot(account, requestedName) {
  * making redundant API calls on every list request.
  */
 async function checkWabaPaymentMethod(account, accessToken) {
-  // Cache: skip if checked within the last 6 hours
+  // Meta's Graph API does not currently expose a boolean for payment method attached 
+  // on the WABA object. Attempting to query `payment_method_attached` results in a 
+  // GraphMethodException (#100).
+  //
+  // To avoid spamming the logs with API errors, we will bypass this check. 
+  // You should rely on Webhooks (`payment_configuration_update`) or the Meta Business Suite UI 
+  // to track payment status.
+  
+  /*
+  // Original broken code:
   const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
   const lastChecked = account.hasPaymentMethodCheckedAt;
   if (lastChecked && Date.now() - lastChecked.getTime() < SIX_HOURS_MS) {
-    return; // Already fresh — skip the API call
+    return; 
   }
 
   if (!account.wabaId) return;
@@ -238,23 +247,21 @@ async function checkWabaPaymentMethod(account, accessToken) {
     const wabaData = await graphGet(
       `/${account.wabaId}`,
       accessToken,
-      { fields: "id,payment_method_attached" },
+      { fields: "id,payment_method_attached" }, // THIS FIELD DOES NOT EXIST
       "Check WABA payment method"
     );
 
-    // Meta returns payment_method_attached: true|false
     const hasPayment = wabaData?.payment_method_attached;
     account.hasPaymentMethod = typeof hasPayment === "boolean" ? hasPayment : null;
     account.hasPaymentMethodCheckedAt = new Date();
   } catch (error) {
-    // Non-fatal: if the token doesn't have ads_management scope or similar
-    // we just leave hasPaymentMethod as its last known value
     console.warn("[wa-payment] Could not check WABA payment method", {
       accountId: String(account._id),
       wabaId: account.wabaId,
       error: error.message,
     });
   }
+  */
 }
 
 async function refreshWhatsappAccountIdentity(account) {
