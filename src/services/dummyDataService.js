@@ -33,9 +33,12 @@ export async function generateDummyData(user, options = {}) {
         timezone: "Asia/Kolkata",
         currency: "INR",
         active: true,
-        trialEndsAt: isExpired 
-          ? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) 
-          : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+        subscription: {
+          plan: 'free_trial',
+          validUntil: isExpired 
+            ? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) 
+            : new Date(Date.now() + 20 * 24 * 60 * 60 * 1000)
+        }
       });
       console.log("Created demo business:", business._id);
     } else {
@@ -57,10 +60,12 @@ export async function generateDummyData(user, options = {}) {
       ]);
       
       // Update trial status based on options
-      business.trialEndsAt = isExpired 
-          ? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) 
-          : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-      business.subscription = undefined;
+      business.subscription = {
+        plan: 'free_trial',
+        validUntil: isExpired 
+            ? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) 
+            : new Date(Date.now() + 20 * 24 * 60 * 60 * 1000)
+      };
       await business.save();
       
       console.log("Wiped existing dummy data for business:", business._id);
