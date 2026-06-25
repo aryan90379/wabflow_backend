@@ -481,10 +481,17 @@ async function processWaitingInputV2(flow, context) {
     const parsedCustomFields = [];
     customFieldsConfig.forEach((field, index) => {
       if (data[`custom_${index}`] !== undefined) {
+        let rawValue = data[`custom_${index}`];
+        if (field.type === 'mcq' && typeof rawValue === 'string' && rawValue.startsWith('opt_')) {
+          const optIndex = parseInt(rawValue.split('_')[1], 10);
+          if (!isNaN(optIndex) && Array.isArray(field.options) && field.options[optIndex]) {
+            rawValue = field.options[optIndex];
+          }
+        }
         parsedCustomFields.push({
           name: field.name || `Field ${index + 1}`,
           question: field.question || "Question",
-          value: String(data[`custom_${index}`])
+          value: String(rawValue)
         });
       }
     });
