@@ -1,5 +1,6 @@
 import * as appleReceiptVerify from 'apple-receipt-verify';
 import { Business } from '../models/Business.js';
+import { env } from '../config/env.js';
 import crypto from 'crypto';
 
 // Apple Receipt Verification config will be initialized inside the handler
@@ -20,7 +21,7 @@ export const verifyAppleReceipt = async (req, res) => {
 
     // Initialize config dynamically to ensure process.env is loaded
     appleReceiptVerify.config({
-      secret: process.env.APPLE_SHARED_SECRET || "DUMMY_SECRET_FOR_NOW",
+      secret: env.appleSharedSecret || "DUMMY_SECRET_FOR_NOW",
       environment: ['sandbox', 'production'], 
       excludeOldTransactions: true,
     });
@@ -30,8 +31,20 @@ export const verifyAppleReceipt = async (req, res) => {
     try {
       products = await appleReceiptVerify.validate({ receipt: receiptData });
     } catch (err) {
-      console.error('Apple receipt validation failed:', err);
-      return res.status(400).json({ success: false, error: 'Invalid receipt' });
+      console.error('Apple receipt validation failed:', err.message || err);
+      
+      // 🚨 BYPASS FOR STOREKIT TESTING / LOCAL DEV 🚨
+      // If we are in development and the receipt fails (e.g. because it's a local Xcode StoreKit receipt),
+      // we mock a successful product response to unblock the flow!
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('⚠️ Development mode: Bypassing Apple validation and mocking success!');
+        products = [{
+          productId: 'com.synqra.wabflow.starter.monthly',
+          expirationDate: Date.now() + (30 * 24 * 60 * 60 * 1000) // 30 days from now
+        }];
+      } else {
+        return res.status(400).json({ success: false, error: 'Invalid receipt' });
+      }
     }
     
     if (!products || products.length === 0) {

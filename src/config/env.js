@@ -18,6 +18,7 @@ export const env = {
     .map((value) => value.trim())
     .filter(Boolean),
   appleClientId: process.env.APPLE_CLIENT_ID || "",
+  appleSharedSecret: process.env.APPLE_SHARED_SECRET || "",
   metaAppId: process.env.META_APP_ID || "",
   metaAppSecret: process.env.META_APP_SECRET || "",
   metaGraphVersion: process.env.META_GRAPH_VERSION || "v25.0",
