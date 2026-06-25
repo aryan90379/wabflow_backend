@@ -1,4 +1,4 @@
-import appleReceiptVerify from 'apple-receipt-verify';
+import * as appleReceiptVerify from 'apple-receipt-verify';
 import { Business } from '../models/Business.js';
 import crypto from 'crypto';
 
