@@ -301,13 +301,39 @@ export function generateBookingFlowJson(config) {
               label: String(config.notesLabel || "Any Notes?").slice(0, 80),
               required: Boolean(config.notesRequired),
             }] : []),
-            ...customFieldsConfig.map((field, index) => ({
-              type: field.type === "long_text" ? "TextArea" : "TextInput",
-              name: `custom_${index}`,
-              label: String(field.question || field.name || "Question").slice(0, 80),
-              required: true,
-              ...(field.type === "number" ? { "input-type": "number" } : {}),
-            })),
+            ...customFieldsConfig.map((field, index) => {
+              const label = String(field.question || field.name || "Question").slice(0, 80);
+              const name = `custom_${index}`;
+              
+              if (field.type === "date") {
+                return {
+                  type: "DatePicker",
+                  name,
+                  label,
+                  required: true,
+                };
+              }
+              
+              if (field.type === "mcq") {
+                const options = Array.isArray(field.options) ? field.options : [];
+                const formattedOptions = options.map((opt, i) => ({ id: `opt_${i}`, title: String(opt).slice(0, 30) }));
+                return {
+                  type: formattedOptions.length <= 3 ? "RadioButtonsGroup" : "Dropdown",
+                  name,
+                  label,
+                  required: true,
+                  "data-source": formattedOptions,
+                };
+              }
+              
+              return {
+                type: field.type === "long_text" ? "TextArea" : "TextInput",
+                name,
+                label,
+                required: true,
+                ...(field.type === "number" ? { "input-type": "number" } : {}),
+              };
+            }),
             {
               type: "Footer",
               label: "Submit Request",
