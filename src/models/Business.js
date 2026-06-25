@@ -62,7 +62,7 @@ const businessSchema = new mongoose.Schema(
     },
     active: { type: Boolean, default: true },
     subscription: {
-      plan: { type: String, enum: ["free_trial", "pro", "enterprise"], default: "free_trial" },
+      plan: { type: String, enum: ["free_trial", "starter", "pro", "enterprise"], default: "free_trial" },
       validUntil: { type: Date, default: () => new Date(Date.now() + 20 * 24 * 60 * 60 * 1000) },
     },
   },

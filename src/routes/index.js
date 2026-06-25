@@ -137,6 +137,7 @@ import {
 } from "../controllers/qrShortLinkController.js";
 
 import deviceRoutes from "./deviceRoutes.js";
+import subscriptionRoutes from "./subscription.routes.js";
 
 const apiRouter = Router();
 
@@ -292,6 +293,8 @@ businessRouter.get("/team/:memberId/sessions", requirePermission("team.view"), a
 businessRouter.delete("/team/:memberId/sessions/:sessionId", requirePermission("team.revoke"), asyncHandler(revokeMemberSession));
 
 businessRouter.get("/audit-logs", requirePermission("settings.view"), asyncHandler(listAuditLogs));
+
+businessRouter.use("/subscriptions", subscriptionRoutes);
 
 businessesRouter.use("/:businessId", businessRouter);
 apiRouter.use("/businesses", businessesRouter);
