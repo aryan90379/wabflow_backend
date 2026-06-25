@@ -2,12 +2,8 @@ import * as appleReceiptVerify from 'apple-receipt-verify';
 import { Business } from '../models/Business.js';
 import crypto from 'crypto';
 
-// Initialize the Apple Receipt Verification configuration
-appleReceiptVerify.config({
-  secret: process.env.APPLE_SHARED_SECRET || "DUMMY_SECRET_FOR_NOW", // User will need to set this
-  environment: ['sandbox', 'production'], 
-  excludeOldTransactions: true,
-});
+// Apple Receipt Verification config will be initialized inside the handler
+// to ensure process.env variables are loaded
 
 export const verifyAppleReceipt = async (req, res) => {
   try {
@@ -21,6 +17,13 @@ export const verifyAppleReceipt = async (req, res) => {
     if (!businessId) {
       return res.status(403).json({ success: false, error: 'Unauthorized: Business ID not found' });
     }
+
+    // Initialize config dynamically to ensure process.env is loaded
+    appleReceiptVerify.config({
+      secret: process.env.APPLE_SHARED_SECRET || "DUMMY_SECRET_FOR_NOW",
+      environment: ['sandbox', 'production'], 
+      excludeOldTransactions: true,
+    });
 
     // Verify receipt with Apple
     let products;
