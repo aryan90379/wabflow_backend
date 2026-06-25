@@ -1,0 +1,14 @@
+import mongoose from 'mongoose';
+import { Booking } from './src/models/Booking.js';
+import env from './src/config/env.js';
+
+mongoose.connect(env.mongoUri).then(async () => {
+  const bookings = await Booking.find().sort({createdAt: -1}).limit(3);
+  console.log(JSON.stringify(bookings.map(b => ({
+    id: b._id,
+    customerName: b.customerName,
+    notes: b.notes,
+    customFields: b.customFields
+  })), null, 2));
+  process.exit();
+}).catch(console.error);

@@ -1,10 +1,14 @@
 import mongoose from 'mongoose';
 import { Booking } from './src/models/Booking.js';
-import dotenv from 'dotenv';
-dotenv.config({ path: './.env' });
+import { Conversation } from './src/models/Conversation.js';
 
-mongoose.connect(process.env.MONGODB_URI).then(async () => {
-  const bookings = await Booking.find({}).sort({createdAt: -1}).limit(2);
-  console.log(JSON.stringify(bookings.map(b => ({ id: b._id, customerName: b.customerName, customFields: b.customFields, notes: b.notes })), null, 2));
-  process.exit();
-}).catch(console.error);
+mongoose.connect('mongodb://localhost:27017/wabflow').then(async () => {
+  const latestBooking = await Booking.findOne().sort({ createdAt: -1 }).lean();
+  console.log("Latest Booking:", JSON.stringify(latestBooking, null, 2));
+
+  if (latestBooking) {
+    const convo = await Conversation.findById(latestBooking.conversationId).lean();
+    console.log("Conversation variables:", convo?.botState?.variables);
+  }
+  process.exit(0);
+});

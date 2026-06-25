@@ -138,6 +138,27 @@ async function handleBookingFlowReply({ business, account, contact, conversation
     ...(!serviceItemId && rawServiceItemId ? [["appointmentReason", String(responseJson.appointmentReason || rawServiceItemId)]] : []),
   ]);
 
+  const bookingConfig = conversation?.botState?.variables?.get?.("_bookingConfig") || {};
+  const customFieldsConfig = Array.isArray(bookingConfig.customFields) ? bookingConfig.customFields : [];
+  
+  const parsedCustomFields = [];
+  customFieldsConfig.forEach((field, index) => {
+    if (responseJson[`custom_${index}`] !== undefined) {
+      let rawValue = responseJson[`custom_${index}`];
+      if (field.type === 'mcq' && typeof rawValue === 'string' && rawValue.startsWith('opt_')) {
+        const optIndex = parseInt(rawValue.split('_')[1], 10);
+        if (!isNaN(optIndex) && Array.isArray(field.options) && field.options[optIndex]) {
+          rawValue = field.options[optIndex];
+        }
+      }
+      parsedCustomFields.push({
+        name: field.name || `Field ${index + 1}`,
+        question: field.question || "Question",
+        value: String(rawValue)
+      });
+    }
+  });
+
   const booking = await Booking.create({
     businessId: business._id,
     contactId: contact._id,
@@ -150,6 +171,7 @@ async function handleBookingFlowReply({ business, account, contact, conversation
     startDate: responseJson.startDate,
     startTime: normalizeTime(responseJson.startTime),
     notes: responseJson.notes || "",
+    customFields: parsedCustomFields,
     metadata,
   });
 
@@ -322,6 +344,15 @@ export async function handleSendBookingMetaFlow({
   const bookingCopy = getBookingFlowCopy(business, selectedRoomName);
   let flowId;
   let flowConfigId;
+
+  if (!conversation.botState) {
+    conversation.botState = { variables: new Map() };
+  } else if (!conversation.botState.variables) {
+    conversation.botState.variables = new Map();
+  }
+  conversation.botState.variables.set("_bookingConfig", resolvedBookingConfig);
+  conversation.markModified("botState.variables");
+  await conversation.save();
 
   try {
     ({ flowId, flowConfigId } = await ensureBookingMetaFlow({
