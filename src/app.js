@@ -6,6 +6,7 @@ import { apiRouter } from "./routes/index.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
 import metaRoutes from "./routes/metaRoutes.js";
 import qrShortLinkRoutes from "./routes/qrShortLinkRoutes.js";
+import webhookRoutes from "./routes/webhook.routes.js";
 export const app = express();
 
 app.set("trust proxy", 1);
@@ -34,6 +35,7 @@ app.use("/android/download", express.static(path.join(__dirname, "../android/dow
 app.use("/cdn", express.static(path.join(__dirname, "../cdn")));
 
 app.use("/q", qrShortLinkRoutes);
+app.use("/api/webhooks", webhookRoutes);
 app.use("/api/meta", metaRoutes);
 app.use("/api", apiRouter);
 app.use(notFoundHandler);

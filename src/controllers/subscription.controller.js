@@ -39,6 +39,7 @@ export const verifyAppleReceipt = async (req, res) => {
       console.log('⚠️ Bypassing Apple validation to unblock testing!');
       products = [{
         productId: 'com.synqra.wabflow.starter.monthly',
+        originalTransactionId: 'LOCAL_SIMULATOR_TXN_' + Date.now(), // Fake transaction ID for sandbox
         expirationDate: Date.now() + (30 * 24 * 60 * 60 * 1000) // 30 days from now
       }];
     }
@@ -68,7 +69,8 @@ export const verifyAppleReceipt = async (req, res) => {
       {
         $set: {
           'subscription.plan': 'starter',
-          'subscription.validUntil': expirationDate
+          'subscription.validUntil': expirationDate,
+          'subscription.appleOriginalTransactionId': activeSubscription.originalTransactionId
         }
       },
       { new: true }
