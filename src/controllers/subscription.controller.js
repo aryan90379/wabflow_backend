@@ -32,16 +32,7 @@ export const verifyAppleReceipt = async (req, res) => {
       products = await appleReceiptVerify.validate({ receipt: receiptData });
     } catch (err) {
       console.error('Apple receipt validation failed:', err.message || err);
-      
-      // 🚨 TEMPORARY BYPASS TO UNBLOCK TESTING 🚨
-      // Your server is running in production mode, but Xcode local receipts will fail Apple's validation.
-      // We are temporarily bypassing this so you can finish testing your flow!
-      console.log('⚠️ Bypassing Apple validation to unblock testing!');
-      products = [{
-        productId: 'com.synqra.wabflow.starter.monthly',
-        originalTransactionId: 'LOCAL_SIMULATOR_TXN_' + Date.now(), // Fake transaction ID for sandbox
-        expirationDate: Date.now() + (30 * 24 * 60 * 60 * 1000) // 30 days from now
-      }];
+      return res.status(400).json({ success: false, error: 'Apple receipt validation failed' });
     }
     
     if (!products || products.length === 0) {
