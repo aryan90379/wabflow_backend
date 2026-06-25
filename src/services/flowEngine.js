@@ -1028,6 +1028,10 @@ export async function continueFlowV2({ flow, business, account, contact, convers
       }
 
       if (step.config?.actionType === "send_booking_form") {
+        const payloadBookingConfig = step.config?.payload?.bookingConfig;
+        if (payloadBookingConfig) {
+          conversation.botState.variables.set("_bookingConfig", payloadBookingConfig);
+        }
         const variables = mapToObject(conversation.botState.variables);
         conversation.botState.currentNodeId = step.id;
         conversation.botState.awaitingInput = {
@@ -1039,7 +1043,7 @@ export async function continueFlowV2({ flow, business, account, contact, convers
         };
         conversation.botState.updatedAt = new Date();
         await conversation.save();
-        return { handled: true, action: "send_booking_meta_flow", flow, step, bookingConfig: variables._bookingConfig || {} };
+        return { handled: true, action: "send_booking_meta_flow", flow, step, bookingConfig: payloadBookingConfig || variables._bookingConfig || {} };
       }
 
       // similar to V1 action node
