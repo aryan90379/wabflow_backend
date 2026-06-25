@@ -217,6 +217,8 @@ export function generateBookingFlowJson(config) {
     ...(shouldAddOtherOption ? [{ id: "other", title: String(config.otherOptionLabel || "Other").slice(0, 30) }] : []),
   ];
 
+  const customFieldsConfig = Array.isArray(config.customFields) ? config.customFields : [];
+
   const completePayload = {
     startDate: "${form.booking_date}",
     startTime: timeSlots.length ? "${form.booking_time_slot}" : "${form.booking_time}",
@@ -228,6 +230,10 @@ export function generateBookingFlowJson(config) {
   if (collectFields.name) completePayload.customerName = "${form.customer_name}";
   if (collectFields.phone) completePayload.customerPhone = "${form.customer_phone}";
   if (collectFields.notes) completePayload.notes = "${form.booking_notes}";
+
+  customFieldsConfig.forEach((field, index) => {
+    completePayload[`custom_${index}`] = `\${form.custom_${index}}`;
+  });
 
   const screens = [];
 
@@ -295,6 +301,13 @@ export function generateBookingFlowJson(config) {
               label: String(config.notesLabel || "Any Notes?").slice(0, 80),
               required: Boolean(config.notesRequired),
             }] : []),
+            ...customFieldsConfig.map((field, index) => ({
+              type: field.type === "long_text" ? "TextArea" : "TextInput",
+              name: `custom_${index}`,
+              label: String(field.question || field.name || "Question").slice(0, 80),
+              required: true,
+              ...(field.type === "number" ? { "input-type": "number" } : {}),
+            })),
             {
               type: "Footer",
               label: "Submit Request",

@@ -46,6 +46,16 @@ const bookingSchema = new mongoose.Schema(
     customerName: { type: String, default: "" },
     customerPhone: { type: String, default: "" },
     notes: { type: String, default: "" },
+    customFields: {
+      type: [
+        {
+          name: { type: String, required: true },
+          question: { type: String, required: true },
+          value: { type: String, default: "" },
+        },
+      ],
+      default: [],
+    },
     reminders: { type: [bookingReminderSchema], default: [] },
     updatedByMemberId: { type: mongoose.Schema.Types.ObjectId, ref: "BusinessMember", default: null },
     updatedByName: { type: String, default: "" },

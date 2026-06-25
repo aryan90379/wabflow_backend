@@ -474,6 +474,25 @@ async function processWaitingInputV2(flow, context) {
     if (data.startDate) booking.startDate = data.startDate;
     if (data.startTime) booking.startTime = data.startTime;
     if (data.notes) booking.notes = data.notes;
+
+    const bookingConfig = context.conversation.botState.variables.get("_bookingConfig") || {};
+    const customFieldsConfig = Array.isArray(bookingConfig.customFields) ? bookingConfig.customFields : [];
+    
+    const parsedCustomFields = [];
+    customFieldsConfig.forEach((field, index) => {
+      if (data[`custom_${index}`] !== undefined) {
+        parsedCustomFields.push({
+          name: field.name || `Field ${index + 1}`,
+          question: field.question || "Question",
+          value: String(data[`custom_${index}`])
+        });
+      }
+    });
+    
+    if (parsedCustomFields.length > 0) {
+      booking.customFields = parsedCustomFields;
+    }
+
     if (serviceItemId) {
       booking.serviceItemId = serviceItemId;
       const service = await ServiceItem.findOne({ _id: serviceItemId, businessId: context.business._id });
