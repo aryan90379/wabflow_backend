@@ -19,59 +19,43 @@ export const verifyAppleReceipt = async (req, res) => {
       return res.status(403).json({ success: false, error: 'Unauthorized: Business ID not found' });
     }
 
-    // Initialize config dynamically to ensure process.env is loaded
-    appleReceiptVerify.config({
-      secret: env.appleSharedSecret || "DUMMY_SECRET_FOR_NOW",
-      environment: ['sandbox', 'production'], 
-      excludeOldTransactions: true,
+    console.log("--> Sending receipt to Apple Sandbox...");
+    console.log("--> Using Secret:", env.appleSharedSecret ? "LOADED" : "MISSING");
+    
+    const fetch = (await import('node-fetch')).default;
+    const appleRes = await fetch('https://sandbox.itunes.apple.com/verifyReceipt', {
+      method: 'POST',
+      body: JSON.stringify({
+        'receipt-data': receiptData,
+        'password': env.appleSharedSecret || "DUMMY_SECRET_FOR_NOW"
+      })
     });
-
-    // Verify receipt with Apple
-    let products;
-    try {
-      products = await appleReceiptVerify.validate({ receipt: receiptData });
-    } catch (err) {
-      console.error('Apple receipt validation failed:', err.message || err);
-      return res.status(400).json({ success: false, error: 'Apple receipt validation failed' });
-    }
     
-    if (!products || products.length === 0) {
-       return res.status(400).json({ success: false, error: 'No active subscriptions found in receipt' });
-    }
-
-    // Find the latest active subscription (usually sorted by expirationDate)
-    const activeSubscription = products.find(p => p.productId === 'com.synqra.wabflow.starter.monthly');
+    const appleData = await appleRes.json();
+    console.log("--> APPLE RESPONSE STATUS:", appleData.status);
     
-    if (!activeSubscription) {
-      return res.status(400).json({ success: false, error: 'Target product not found in receipt' });
+    if (appleData.status !== 0) {
+       console.log("--> APPLE REJECTED IT! Error Code:", appleData.status);
+       return res.status(400).json({ success: false, error: `Apple rejected receipt. Code: ${appleData.status}` });
     }
 
-    // Check if it's expired
-    const expirationDate = new Date(activeSubscription.expirationDate);
-    const now = new Date();
-    
-    if (expirationDate < now) {
-      return res.status(400).json({ success: false, error: 'Subscription is expired' });
+    if (!appleData.receipt || !appleData.receipt.in_app || appleData.receipt.in_app.length === 0) {
+      return res.status(400).json({ success: false, error: 'No active subscriptions found in receipt' });
     }
 
-    // Update the business in the database
+    // Update the business in the database if successful
     const updatedBusiness = await Business.findByIdAndUpdate(
       businessId,
       {
         $set: {
           'subscription.plan': 'starter',
-          'subscription.validUntil': expirationDate,
-          'subscription.appleOriginalTransactionId': activeSubscription.originalTransactionId
+          'subscription.validUntil': new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days fallback
         }
       },
       { new: true }
     );
 
-    res.status(200).json({
-      success: true,
-      message: 'Subscription verified successfully',
-      business: updatedBusiness
-    });
+    res.status(200).json({ success: true, business: updatedBusiness });
 
   } catch (error) {
     console.error('Error in verifyAppleReceipt:', error);
