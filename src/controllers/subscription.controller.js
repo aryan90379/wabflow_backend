@@ -19,12 +19,45 @@ export const verifyAppleReceipt = async (req, res) => {
       return res.status(403).json({ success: false, error: 'Unauthorized: Business ID not found' });
     }
 
-    console.log("--> Sending receipt to Apple Sandbox...");
-    console.log("--> Using Secret:", env.appleSharedSecret ? "LOADED" : "MISSING");
-    
+    console.log("--> Received Receipt Data (length):", receiptData.length);
+
+    // --- STOREKIT 2 (JWS) SUPPORT ---
+    if (receiptData.includes('.')) {
+      console.log("--> Detected StoreKit 2 JWS Token!");
+      try {
+        const payloadBase64 = receiptData.split('.')[1];
+        const payloadString = Buffer.from(payloadBase64, 'base64').toString('utf8');
+        const payload = JSON.parse(payloadString);
+        
+        console.log("--> SK2 Payload Product:", payload.productId);
+        
+        if (payload.productId !== 'com.synqra.wabflow.starter.monthly') {
+          return res.status(400).json({ success: false, error: 'Target product not found in receipt' });
+        }
+        
+        const expirationDate = payload.expiresDate || (Date.now() + 30 * 24 * 60 * 60 * 1000);
+        if (expirationDate < Date.now()) {
+          return res.status(400).json({ success: false, error: 'Subscription is expired' });
+        }
+
+        const updatedBusiness = await Business.findByIdAndUpdate(
+          businessId,
+          { $set: { 'subscription.plan': 'starter', 'subscription.validUntil': new Date(expirationDate) } },
+          { new: true }
+        );
+        return res.status(200).json({ success: true, business: updatedBusiness });
+      } catch (err) {
+        console.error("--> Failed to parse JWS:", err);
+        return res.status(400).json({ success: false, error: 'Invalid StoreKit 2 receipt format' });
+      }
+    }
+
+    // --- STOREKIT 1 (BASE64) SUPPORT ---
+    console.log("--> Detected StoreKit 1 Base64 Receipt. Validating with Apple...");
     const fetch = (await import('node-fetch')).default;
     const appleRes = await fetch('https://sandbox.itunes.apple.com/verifyReceipt', {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         'receipt-data': receiptData,
         'password': env.appleSharedSecret || "DUMMY_SECRET_FOR_NOW"
