@@ -72,7 +72,8 @@ export const verifyAppleReceipt = async (req, res) => {
     
     if (appleData.status !== 0) {
        console.log("--> APPLE REJECTED IT! Error Code:", appleData.status);
-       return res.status(400).json({ success: false, error: `Apple rejected receipt. Code: ${appleData.status}` });
+       const debugInfo = `Code: ${appleData.status}. Type: ${typeof cleanReceiptData}. Len: ${cleanReceiptData ? cleanReceiptData.length : 0}`;
+       return res.status(400).json({ success: false, error: `Apple rejected receipt. ${debugInfo}` });
     }
 
     if (!appleData.receipt || !appleData.receipt.in_app || appleData.receipt.in_app.length === 0) {
