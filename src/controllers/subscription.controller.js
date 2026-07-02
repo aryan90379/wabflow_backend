@@ -21,11 +21,14 @@ export const verifyAppleReceipt = async (req, res) => {
 
     console.log("--> Received Receipt Data (length):", receiptData.length);
 
+    // Apple's API throws 21002 if there are any line breaks or spaces in the Base64 string!
+    const cleanReceiptData = typeof receiptData === 'string' ? receiptData.replace(/\s+/g, '') : receiptData;
+
     // --- STOREKIT 2 (JWS) SUPPORT ---
-    if (receiptData.includes('.')) {
+    if (typeof cleanReceiptData === 'string' && cleanReceiptData.includes('.')) {
       console.log("--> Detected StoreKit 2 JWS Token!");
       try {
-        const payloadBase64 = receiptData.split('.')[1];
+        const payloadBase64 = cleanReceiptData.split('.')[1];
         const payloadString = Buffer.from(payloadBase64, 'base64').toString('utf8');
         const payload = JSON.parse(payloadString);
         
@@ -59,7 +62,7 @@ export const verifyAppleReceipt = async (req, res) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        'receipt-data': receiptData,
+        'receipt-data': cleanReceiptData,
         'password': env.appleSharedSecret || "DUMMY_SECRET_FOR_NOW"
       })
     });
