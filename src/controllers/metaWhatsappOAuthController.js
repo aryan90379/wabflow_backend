@@ -25,7 +25,7 @@ export async function createWhatsappConnectState(req, res) {
       purpose: "whatsapp_connect",
     },
     env.jwtSecret(),
-    { expiresIn: "10m" }
+    { expiresIn: "1h" }
   );
 
   return res.json({
