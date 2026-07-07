@@ -13,6 +13,7 @@ const businessSchema = new mongoose.Schema(
   {
     ownerId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
     name: { type: String, required: true, trim: true },
+    legalName: { type: String, default: "" },
     businessType: { type: String, default: "other", trim: true, lowercase: true },
     description: { type: String, default: "" },
     about: { type: String, default: "" },
@@ -22,6 +23,13 @@ const businessSchema = new mongoose.Schema(
     email: { type: String, default: "" },
     website: { type: String, default: "" },
     logoUrl: { type: String, default: "" },
+    customerCareMobile: { type: String, default: "" },
+    customerCareLandline: { type: String, default: "" },
+    customerCareEmail: { type: String, default: "" },
+    grievanceOfficerName: { type: String, default: "" },
+    grievanceOfficerMobile: { type: String, default: "" },
+    grievanceOfficerLandline: { type: String, default: "" },
+    grievanceOfficerEmail: { type: String, default: "" },
     timezone: { type: String, default: "Asia/Kolkata" },
     openingHours: {
       monday: { type: dayHoursSchema, default: () => ({}) },
