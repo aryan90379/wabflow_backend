@@ -15,9 +15,13 @@ const businessSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true },
     businessType: { type: String, default: "other", trim: true, lowercase: true },
     description: { type: String, default: "" },
+    about: { type: String, default: "" },
     address: { type: String, default: "" },
     city: { type: String, default: "" },
     phone: { type: String, default: "" },
+    email: { type: String, default: "" },
+    website: { type: String, default: "" },
+    logoUrl: { type: String, default: "" },
     timezone: { type: String, default: "Asia/Kolkata" },
     openingHours: {
       monday: { type: dayHoursSchema, default: () => ({}) },
@@ -65,6 +69,8 @@ const businessSchema = new mongoose.Schema(
       plan: { type: String, enum: ["free_trial", "starter", "pro", "enterprise"], default: "free_trial" },
       validUntil: { type: Date, default: () => new Date(Date.now() + 20 * 24 * 60 * 60 * 1000) },
       appleOriginalTransactionId: { type: String, index: true },
+      googlePurchaseToken: { type: String, index: true },
+      googleOrderId: { type: String, index: true },
     },
   },
   { timestamps: true }

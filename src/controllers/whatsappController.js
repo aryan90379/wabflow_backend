@@ -291,6 +291,38 @@ async function refreshWhatsappAccountIdentity(account) {
       phone?.verified_name || account.verifiedName || "";
     account.officialDisplayNameLastSyncedAt = new Date();
 
+    const profile = await graphGet(
+      `/${account.phoneNumberId}/whatsapp_business_profile`,
+      accessToken,
+      {
+        fields:
+          "about,address,description,email,profile_picture_url,websites,vertical",
+      },
+      "Refresh WhatsApp business profile"
+    );
+
+    const metaProfile =
+      Array.isArray(profile?.data) ? profile.data[0] : null;
+
+    if (metaProfile) {
+      account.profileAbout =
+        metaProfile.about || account.profileAbout || "";
+      account.profileDescription =
+        metaProfile.description || account.profileDescription || "";
+      account.profilePictureUrl =
+        metaProfile.profile_picture_url || account.profilePictureUrl || "";
+      account.profileAddress =
+        metaProfile.address || account.profileAddress || "";
+      account.profileEmail =
+        metaProfile.email || account.profileEmail || "";
+      account.profileWebsites =
+        Array.isArray(metaProfile.websites)
+          ? metaProfile.websites.filter(Boolean)
+          : account.profileWebsites || [];
+      account.profileVertical =
+        metaProfile.vertical || account.profileVertical || "";
+    }
+
     syncOfficialDisplayNameRequest(account);
 
     // Check payment method (cached for 6 h — non-fatal)
@@ -912,6 +944,8 @@ export async function connectWhatsApp(
           }
         );
 
+    await refreshWhatsappAccountIdentity(account);
+
     req.business.integrations =
       req.business
         .integrations || {};
@@ -1207,16 +1241,60 @@ export async function updateWhatsappBusinessProfile(
         .description ||
         ""
     )
-      .trim()
+    .trim()
       .slice(0, 512);
 
-  const profilePictureUrl =
+  const address =
     String(
-      req.body
-        .profilePictureUrl ||
+      req.body.address ||
         ""
     )
-      .trim();
+      .trim()
+      .slice(0, 256);
+
+  const email =
+    String(
+      req.body.email ||
+        ""
+    )
+      .trim()
+      .slice(0, 128);
+
+  const websites = Array.isArray(req.body.websites)
+    ? req.body.websites
+    : req.body.website
+      ? [req.body.website]
+      : [];
+
+  const cleanWebsites =
+    websites
+      .map((item) => String(item || "").trim())
+      .filter(Boolean)
+      .slice(0, 2);
+
+  const vertical =
+    String(
+      req.body.vertical ||
+        ""
+    )
+      .trim()
+      .slice(0, 64);
+
+  const hasProfilePictureUrl =
+    Object.prototype.hasOwnProperty.call(
+      req.body,
+      "profilePictureUrl"
+    );
+
+  const profilePictureUrl =
+    hasProfilePictureUrl
+      ? String(
+          req.body
+            .profilePictureUrl ||
+            ""
+        )
+          .trim()
+      : "";
 
   const previousRequestedName =
     account.officialDisplayNameRequested ||
@@ -1235,15 +1313,25 @@ export async function updateWhatsappBusinessProfile(
     messaging_product:
       "whatsapp",
     ...(about ? { about } : {}),
+    ...(address ? { address } : {}),
     ...(description
       ? { description }
       : {}),
+    ...(email ? { email } : {}),
+    ...(cleanWebsites.length
+      ? { websites: cleanWebsites }
+      : {}),
+    ...(vertical ? { vertical } : {}),
   };
 
   try {
     if (
       about ||
+      address ||
       description ||
+      email ||
+      cleanWebsites.length ||
+      vertical ||
       profilePictureUrl
     ) {
       const {
@@ -1280,7 +1368,7 @@ export async function updateWhatsappBusinessProfile(
         accessToken,
         {
           fields:
-            "about,description,profile_picture_url",
+            "about,address,description,email,profile_picture_url,websites,vertical",
         },
         "Fetch WhatsApp business profile"
       );
@@ -1294,6 +1382,33 @@ export async function updateWhatsappBusinessProfile(
             ?.profile_picture_url ||
           "",
       });
+
+      const metaProfile =
+        Array.isArray(refreshedProfile?.data)
+          ? refreshedProfile.data[0]
+          : null;
+
+      if (metaProfile) {
+        account.profileAbout =
+          metaProfile.about || about;
+        account.profileDescription =
+          metaProfile.description || description;
+        account.profilePictureUrl =
+          metaProfile.profile_picture_url ||
+          profilePictureUrl ||
+          account.profilePictureUrl ||
+          "";
+        account.profileAddress =
+          metaProfile.address || address;
+        account.profileEmail =
+          metaProfile.email || email;
+        account.profileWebsites =
+          Array.isArray(metaProfile.websites)
+            ? metaProfile.websites.filter(Boolean)
+            : cleanWebsites;
+        account.profileVertical =
+          metaProfile.vertical || vertical;
+      }
     }
 
     if (
@@ -1317,18 +1432,28 @@ export async function updateWhatsappBusinessProfile(
     syncOfficialDisplayNameRequest(
       account
     );
-    account.profileAbout = about;
+    account.profileAbout = about || account.profileAbout || "";
     account.profileDescription =
-      description;
+      description || account.profileDescription || "";
+    account.profileAddress = address || account.profileAddress || "";
+    account.profileEmail = email || account.profileEmail || "";
+    account.profileWebsites =
+      cleanWebsites.length ? cleanWebsites : account.profileWebsites || [];
+    account.profileVertical = vertical || account.profileVertical || "";
     
-    if (profilePictureUrl && account.profilePictureUrl !== profilePictureUrl) {
+    const storedProfilePictureUrl =
+      account.profilePictureUrl || "";
+
+    if (profilePictureUrl && storedProfilePictureUrl !== profilePictureUrl) {
       account.profilePictureChangeCount = (account.profilePictureChangeCount || 0) + 1;
       account.profilePictureLastUpdatedAt = new Date();
       account.profilePictureUpdateStatus = "success";
     }
     
-    account.profilePictureUrl =
-      profilePictureUrl;
+    if (hasProfilePictureUrl && !storedProfilePictureUrl) {
+      account.profilePictureUrl =
+        profilePictureUrl || "";
+    }
 
     await account.save();
 
