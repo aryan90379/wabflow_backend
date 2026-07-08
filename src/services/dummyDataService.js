@@ -37,7 +37,7 @@ export async function generateDummyData(user, options = {}) {
           plan: 'free_trial',
           validUntil: isExpired 
             ? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) 
-            : new Date(Date.now() + 20 * 24 * 60 * 60 * 1000)
+            : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
         }
       });
       console.log("Created demo business:", business._id);
@@ -64,7 +64,7 @@ export async function generateDummyData(user, options = {}) {
         plan: 'free_trial',
         validUntil: isExpired 
             ? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) 
-            : new Date(Date.now() + 20 * 24 * 60 * 60 * 1000)
+            : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
       };
       await business.save();
       
@@ -365,4 +365,3 @@ export async function generateDummyData(user, options = {}) {
     console.error("Error generating dummy data:", error);
   }
 }
-
