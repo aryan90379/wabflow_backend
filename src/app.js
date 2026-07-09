@@ -3,7 +3,9 @@ import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
 import { apiRouter } from "./routes/index.js";
+import { openStaffLoginLink } from "./controllers/authController.js";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler.js";
+import { asyncHandler } from "./utils/asyncHandler.js";
 import metaRoutes from "./routes/metaRoutes.js";
 import qrShortLinkRoutes from "./routes/qrShortLinkRoutes.js";
 import webhookRoutes from "./routes/webhook.routes.js";
@@ -35,6 +37,7 @@ app.use("/android/download", express.static(path.join(__dirname, "../android/dow
 app.use("/cdn", express.static(path.join(__dirname, "../cdn")));
 
 app.use("/q", qrShortLinkRoutes);
+app.get("/s/:token", asyncHandler(openStaffLoginLink));
 app.use("/api/webhooks", webhookRoutes);
 app.use("/api/meta", metaRoutes);
 app.use("/api", apiRouter);
