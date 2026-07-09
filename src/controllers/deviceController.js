@@ -117,7 +117,7 @@ export const registerPushToken = async (req, res) => {
   }
 };
 import { WhatsappMessageTemplate, Message, Contact } from "../models/index.js";
-import { sendApprovedTemplateMessage } from "../services/templateMessageService.js";
+import { missedCallQueue } from "../workers/missedCallWorker.js";
 
 const MISSED_CALL_COOLDOWN_MS = 12 * 60 * 60 * 1000;
 
@@ -214,23 +214,31 @@ export const handleMissedCall = async (req, res) => {
       });
     }
 
-    const { message, conversation } = await sendApprovedTemplateMessage({
-      businessId: business._id,
-      templateId: template._id,
-      phone,
-      customerName: "Missed Caller",
-    });
+    const job = await missedCallQueue.add(
+      "send-missed-call-template",
+      {
+        businessId: String(business._id),
+        phoneNumber: phone,
+      },
+      {
+        attempts: Number(process.env.MISSED_CALL_SEND_ATTEMPTS || 3),
+        backoff: {
+          type: "exponential",
+          delay: Number(process.env.MISSED_CALL_RETRY_DELAY_MS || 30000),
+        },
+        removeOnComplete: { age: 24 * 60 * 60, count: 1000 },
+        removeOnFail: { age: 7 * 24 * 60 * 60, count: 1000 },
+      }
+    );
 
     return res.status(200).json({
       success: true,
-      action: "sent",
-      status: message.status,
-      reason: "Template accepted by the send pipeline. WhatsApp delivery status will update from webhooks.",
-      message: "Template sent successfully.",
+      action: "queued",
+      status: "queued",
+      reason: "Missed-call message queued for sending.",
+      message: "Missed-call message queued.",
       data: {
-        message: serializeMissedCallMessage(message),
-        conversation,
-        conversationId: String(conversation?._id || conversation?.id || message.conversationId),
+        jobId: String(job.id),
       },
     });
   } catch (error) {
@@ -248,7 +256,7 @@ export const handleMissedCall = async (req, res) => {
 
 export const getMissedCallStatus = async (req, res) => {
   try {
-    const { phoneNumber, businessId, since } = req.query;
+    const { phoneNumber, businessId, since, jobId } = req.query;
     if (!phoneNumber || !businessId) {
       return res.status(400).json({ success: false, message: "phoneNumber and businessId are required" });
     }
@@ -260,6 +268,53 @@ export const getMissedCallStatus = async (req, res) => {
 
     const phone = normalizePhone(phoneNumber);
     const sinceDate = since ? new Date(Number(since)) : new Date(Date.now() - MISSED_CALL_COOLDOWN_MS);
+
+    if (jobId) {
+      const job = await missedCallQueue.getJob(String(jobId));
+      if (job) {
+        const state = await job.getState();
+        const queuedStates = new Set(["waiting", "delayed", "prioritized", "active", "waiting-children"]);
+        if (queuedStates.has(state)) {
+          return res.status(200).json({
+            success: true,
+            action: "queued",
+            status: "queued",
+            reason: "Missed-call message is queued for sending.",
+            data: { jobId: String(job.id) },
+          });
+        }
+
+        if (state === "failed") {
+          return res.status(200).json({
+            success: true,
+            action: "failed",
+            status: "failed",
+            reason: job.failedReason || "Missed-call message could not be sent.",
+            data: { jobId: String(job.id) },
+          });
+        }
+
+        if (state === "completed" && job.returnvalue?.status === "skipped") {
+          return res.status(200).json({
+            success: true,
+            action: "skipped",
+            status: "skipped",
+            reason: job.returnvalue.reason || "Missed-call message was skipped.",
+            data: {
+              jobId: String(job.id),
+              conversationId: job.returnvalue.conversationId,
+              message: job.returnvalue.messageId ? {
+                id: job.returnvalue.messageId,
+                conversationId: job.returnvalue.conversationId,
+                whatsappMessageId: job.returnvalue.whatsappMessageId || "",
+                status: "sent",
+              } : null,
+            },
+          });
+        }
+      }
+    }
+
     const { contact, message } = await findRecentMissedCallMessage({
       businessId: business._id,
       phone,
@@ -271,8 +326,8 @@ export const getMissedCallStatus = async (req, res) => {
         success: true,
         action: "not_found",
         status: "not_found",
-        reason: "No outbound bot/template message was found for this number in the checked window.",
-        data: { contactFound: Boolean(contact), message: null },
+        reason: jobId ? "No sent message was found after the queued job finished." : "No sent message was found for this missed call.",
+        data: { contactFound: Boolean(contact), message: null, jobId: jobId ? String(jobId) : undefined },
       });
     }
 
@@ -287,6 +342,7 @@ export const getMissedCallStatus = async (req, res) => {
         contactFound: true,
         message: serializeMissedCallMessage(message),
         conversationId: String(message.conversationId),
+        jobId: jobId ? String(jobId) : undefined,
       },
     });
   } catch (error) {

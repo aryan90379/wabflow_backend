@@ -8,6 +8,7 @@ import { notificationQueue, notificationWorker } from "./workers/notificationWor
 import { broadcastQueue, broadcastWorker } from "./workers/broadcastWorker.js";
 import { bookingReminderQueue } from "./workers/bookingReminderQueue.js";
 import { bookingReminderWorker } from "./workers/bookingReminderWorker.js";
+import { missedCallQueue, missedCallWorker } from "./workers/missedCallWorker.js";
 
 async function start() {
   await connectDatabase();
@@ -32,6 +33,8 @@ async function start() {
     await broadcastQueue.close();
     await bookingReminderWorker.close();
     await bookingReminderQueue.close();
+    await missedCallWorker.close();
+    await missedCallQueue.close();
 
     server.close(() => process.exit(0));
   };
