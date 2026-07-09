@@ -116,8 +116,54 @@ export const registerPushToken = async (req, res) => {
     res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
-import { WhatsappMessageTemplate, Message } from "../models/index.js";
+import { WhatsappMessageTemplate, Message, Contact } from "../models/index.js";
 import { sendApprovedTemplateMessage } from "../services/templateMessageService.js";
+
+const MISSED_CALL_COOLDOWN_MS = 12 * 60 * 60 * 1000;
+
+function normalizePhone(phoneNumber = "") {
+  return String(phoneNumber).replace(/[^\d]/g, "");
+}
+
+function serializeMissedCallMessage(message) {
+  if (!message) return null;
+
+  return {
+    id: String(message._id),
+    conversationId: String(message.conversationId),
+    whatsappMessageId: message.whatsappMessageId || "",
+    status: message.status,
+    text: message.text || "",
+    error: message.error || null,
+    createdAt: message.createdAt,
+    updatedAt: message.updatedAt,
+  };
+}
+
+async function findRecentMissedCallMessage({ businessId, phone, since = null }) {
+  const contact = await Contact.findOne({
+    businessId,
+    $or: [{ phone }, { waId: phone }],
+  }).select("_id phone waId");
+
+  if (!contact) {
+    return { contact: null, message: null };
+  }
+
+  const filter = {
+    businessId,
+    contactId: contact._id,
+    direction: "outbound",
+    senderType: "bot",
+  };
+
+  if (since) {
+    filter.createdAt = { $gte: since };
+  }
+
+  const message = await Message.findOne(filter).sort({ createdAt: -1 });
+  return { contact, message };
+}
 
 export const handleMissedCall = async (req, res) => {
   try {
@@ -145,18 +191,27 @@ export const handleMissedCall = async (req, res) => {
       return res.status(400).json({ success: false, message: "Configured template is not approved or not found." });
     }
 
-    const phone = phoneNumber.replace(/[^\d]/g, "");
+    const phone = normalizePhone(phoneNumber);
     
     // Simple rate limiting: don't send if we sent a template to this number in the last 12 hours.
-    const recentMessage = await Message.findOne({
+    const { message: recentMessage } = await findRecentMissedCallMessage({
       businessId: business._id,
-      "recipient.phone": phone,
-      senderType: "bot", // Template messages are typically bot
-      createdAt: { $gte: new Date(Date.now() - 12 * 60 * 60 * 1000) }
+      phone,
+      since: new Date(Date.now() - MISSED_CALL_COOLDOWN_MS),
     });
 
     if (recentMessage) {
-      return res.status(200).json({ success: true, message: "Skipped to avoid spamming the caller." });
+      return res.status(200).json({
+        success: true,
+        action: "skipped",
+        status: recentMessage.status,
+        reason: "A bot/template message was already sent to this caller in the last 12 hours.",
+        message: "Skipped to avoid spamming the caller.",
+        data: {
+          message: serializeMissedCallMessage(recentMessage),
+          conversationId: String(recentMessage.conversationId),
+        },
+      });
     }
 
     const { message, conversation } = await sendApprovedTemplateMessage({
@@ -166,9 +221,76 @@ export const handleMissedCall = async (req, res) => {
       customerName: "Missed Caller",
     });
 
-    return res.status(200).json({ success: true, message: "Template sent successfully." });
+    return res.status(200).json({
+      success: true,
+      action: "sent",
+      status: message.status,
+      reason: "Template accepted by the send pipeline. WhatsApp delivery status will update from webhooks.",
+      message: "Template sent successfully.",
+      data: {
+        message: serializeMissedCallMessage(message),
+        conversation,
+        conversationId: String(conversation?._id || conversation?.id || message.conversationId),
+      },
+    });
   } catch (error) {
     console.error("[DeviceController] Error handling missed call:", error);
+    res.status(error.status || 500).json({
+      success: false,
+      action: "failed",
+      status: "failed",
+      reason: error.message || "Internal server error",
+      message: error.message || "Internal server error",
+      error: error.meta || null,
+    });
+  }
+};
+
+export const getMissedCallStatus = async (req, res) => {
+  try {
+    const { phoneNumber, businessId, since } = req.query;
+    if (!phoneNumber || !businessId) {
+      return res.status(400).json({ success: false, message: "phoneNumber and businessId are required" });
+    }
+
+    const business = await Business.findById(businessId);
+    if (!business) {
+      return res.status(404).json({ success: false, message: "Business not found" });
+    }
+
+    const phone = normalizePhone(phoneNumber);
+    const sinceDate = since ? new Date(Number(since)) : new Date(Date.now() - MISSED_CALL_COOLDOWN_MS);
+    const { contact, message } = await findRecentMissedCallMessage({
+      businessId: business._id,
+      phone,
+      since: Number.isNaN(sinceDate.getTime()) ? null : sinceDate,
+    });
+
+    if (!contact || !message) {
+      return res.status(200).json({
+        success: true,
+        action: "not_found",
+        status: "not_found",
+        reason: "No outbound bot/template message was found for this number in the checked window.",
+        data: { contactFound: Boolean(contact), message: null },
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      action: "found",
+      status: message.status,
+      reason: message.status === "failed"
+        ? "WhatsApp reported a send failure. Open the error details for the exact Meta response."
+        : "Found the latest outbound bot/template message for this caller.",
+      data: {
+        contactFound: true,
+        message: serializeMissedCallMessage(message),
+        conversationId: String(message.conversationId),
+      },
+    });
+  } catch (error) {
+    console.error("[DeviceController] Error checking missed call status:", error);
     res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
