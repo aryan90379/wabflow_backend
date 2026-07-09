@@ -140,6 +140,44 @@ function serializeMissedCallMessage(message) {
   };
 }
 
+function extractMessageErrorText(errorValue) {
+  if (!errorValue) return "";
+
+  try {
+    let errorObject = errorValue;
+    if (typeof errorObject === "string") {
+      try {
+        errorObject = JSON.parse(errorObject);
+      } catch {
+        return errorObject;
+      }
+    }
+
+    if (typeof errorObject === "string") return errorObject;
+
+    if (Array.isArray(errorObject)) {
+      const firstError = errorObject[0];
+      if (!firstError) return "";
+      return (
+        firstError?.error_data?.details ||
+        firstError?.message ||
+        firstError?.title ||
+        JSON.stringify(errorObject)
+      );
+    }
+
+    return (
+      errorObject?.error_data?.details ||
+      errorObject?.message ||
+      errorObject?.error?.message ||
+      (typeof errorObject?.error === "string" ? errorObject.error : "") ||
+      (Object.keys(errorObject || {}).length > 0 ? JSON.stringify(errorObject) : "")
+    );
+  } catch {
+    return "";
+  }
+}
+
 async function findRecentMissedCallMessage({ businessId, phone, since = null }) {
   const contact = await Contact.findOne({
     businessId,
@@ -331,12 +369,16 @@ export const getMissedCallStatus = async (req, res) => {
       });
     }
 
+    const failureReason = message.status === "failed"
+      ? extractMessageErrorText(message.error) || "WhatsApp reported a send failure."
+      : "";
+
     return res.status(200).json({
       success: true,
       action: "found",
       status: message.status,
       reason: message.status === "failed"
-        ? "WhatsApp reported a send failure. Open the error details for the exact Meta response."
+        ? failureReason
         : "Found the latest outbound bot/template message for this caller.",
       data: {
         contactFound: true,
