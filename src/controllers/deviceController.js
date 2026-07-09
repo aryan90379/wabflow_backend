@@ -120,6 +120,7 @@ import { WhatsappMessageTemplate, Message, Contact } from "../models/index.js";
 import { missedCallQueue } from "../workers/missedCallWorker.js";
 
 const MISSED_CALL_COOLDOWN_MS = 12 * 60 * 60 * 1000;
+const SENT_OR_ACTIVE_STATUSES = ["queued", "sent", "delivered", "read"];
 
 function normalizePhone(phoneNumber = "") {
   return String(phoneNumber).replace(/[^\d]/g, "");
@@ -178,7 +179,19 @@ function extractMessageErrorText(errorValue) {
   }
 }
 
-async function findRecentMissedCallMessage({ businessId, phone, since = null }) {
+function normalizeTemplateFailureReason(reason = "") {
+  const lower = String(reason).toLowerCase();
+  if (
+    lower.includes("healthy ecosystem") ||
+    lower.includes("ecosystem engagement") ||
+    lower.includes("failed to be delivered")
+  ) {
+    return "Template was sent through WhatsApp, but Meta rejected delivery for this recipient. The same template can still deliver to other numbers.";
+  }
+  return reason;
+}
+
+async function findRecentMissedCallMessage({ businessId, phone, since = null, preferSent = false }) {
   const contact = await Contact.findOne({
     businessId,
     $or: [{ phone }, { waId: phone }],
@@ -199,7 +212,11 @@ async function findRecentMissedCallMessage({ businessId, phone, since = null }) 
     filter.createdAt = { $gte: since };
   }
 
-  const message = await Message.findOne(filter).sort({ createdAt: -1 });
+  const preferredFilter = preferSent
+    ? { ...filter, status: { $in: SENT_OR_ACTIVE_STATUSES } }
+    : filter;
+
+  const message = await Message.findOne(preferredFilter).sort({ createdAt: -1 });
   return { contact, message };
 }
 
@@ -236,6 +253,7 @@ export const handleMissedCall = async (req, res) => {
       businessId: business._id,
       phone,
       since: new Date(Date.now() - MISSED_CALL_COOLDOWN_MS),
+      preferSent: true,
     });
 
     if (recentMessage) {
@@ -353,24 +371,46 @@ export const getMissedCallStatus = async (req, res) => {
       }
     }
 
-    const { contact, message } = await findRecentMissedCallMessage({
+    const { contact, message: successfulMessage } = await findRecentMissedCallMessage({
+      businessId: business._id,
+      phone,
+      since: Number.isNaN(sinceDate.getTime()) ? null : sinceDate,
+      preferSent: true,
+    });
+
+    if (contact && successfulMessage) {
+      return res.status(200).json({
+        success: true,
+        action: "skipped",
+        status: successfulMessage.status,
+        reason: "A bot/template message was already sent to this caller recently.",
+        data: {
+          contactFound: true,
+          message: serializeMissedCallMessage(successfulMessage),
+          conversationId: String(successfulMessage.conversationId),
+          jobId: jobId ? String(jobId) : undefined,
+        },
+      });
+    }
+
+    const { contact: fallbackContact, message } = await findRecentMissedCallMessage({
       businessId: business._id,
       phone,
       since: Number.isNaN(sinceDate.getTime()) ? null : sinceDate,
     });
 
-    if (!contact || !message) {
+    if (!fallbackContact || !message) {
       return res.status(200).json({
         success: true,
         action: "not_found",
         status: "not_found",
         reason: jobId ? "No sent message was found after the queued job finished." : "No sent message was found for this missed call.",
-        data: { contactFound: Boolean(contact), message: null, jobId: jobId ? String(jobId) : undefined },
+        data: { contactFound: Boolean(fallbackContact), message: null, jobId: jobId ? String(jobId) : undefined },
       });
     }
 
     const failureReason = message.status === "failed"
-      ? extractMessageErrorText(message.error) || "WhatsApp reported a send failure."
+      ? normalizeTemplateFailureReason(extractMessageErrorText(message.error) || "WhatsApp reported a send failure.")
       : "";
 
     return res.status(200).json({

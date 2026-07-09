@@ -4,6 +4,7 @@ import { sendApprovedTemplateMessage } from "../services/templateMessageService.
 import { createRedisConnection } from "./redisConnection.js";
 
 const MISSED_CALL_COOLDOWN_MS = 12 * 60 * 60 * 1000;
+const SENT_OR_ACTIVE_STATUSES = ["queued", "sent", "delivered", "read"];
 
 export const missedCallQueue = new Queue("missed-calls", {
   connection: createRedisConnection(),
@@ -26,6 +27,7 @@ async function findRecentMessage({ businessId, phone }) {
     contactId: contact._id,
     direction: "outbound",
     senderType: "bot",
+    status: { $in: SENT_OR_ACTIVE_STATUSES },
     createdAt: { $gte: new Date(Date.now() - MISSED_CALL_COOLDOWN_MS) },
   }).sort({ createdAt: -1 });
 }
