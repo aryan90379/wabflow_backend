@@ -9,8 +9,10 @@ import { BusinessMember } from "../models/BusinessMember.js";
 import { Business } from "../models/Business.js";
 import { StaffSession } from "../models/StaffSession.js";
 import { AuditLog } from "../models/AuditLog.js";
+import { StaffLoginLink } from "../models/StaffLoginLink.js";
 import { env } from "../config/env.js";
 import { generateDummyData } from "../services/dummyDataService.js";
+import { hashStaffLoginToken } from "../services/staffLoginLinkService.js";
 
 const googleClient = new OAuth2Client();
 const STAFF_SESSION_DAYS = 365;
@@ -618,6 +620,108 @@ export async function staffLogin(req, res) {
     });
   } catch (error) {
     console.error("❌ Staff login error:", error);
+    return res.status(500).json({ success: false, error: "Server error." });
+  }
+}
+
+function buildStaffDeepLink(token) {
+  return `wabflow://staff-login?token=${encodeURIComponent(token)}`;
+}
+
+function buildAndroidStaffIntent(token) {
+  return `intent://staff-login?token=${encodeURIComponent(token)}#Intent;scheme=wabflow;end`;
+}
+
+export async function openStaffLoginLink(req, res) {
+  const { token } = req.params;
+  if (!token) return res.status(400).send("Missing staff login token.");
+
+  const userAgent = req.headers["user-agent"] || "";
+  const target = /Android/i.test(userAgent)
+    ? buildAndroidStaffIntent(token)
+    : buildStaffDeepLink(token);
+
+  return res.redirect(302, target);
+}
+
+export async function staffLinkLogin(req, res) {
+  try {
+    const { token, device = {} } = req.body;
+    if (!token) {
+      return res.status(400).json({ success: false, error: "Missing staff login token." });
+    }
+
+    const loginLink = await StaffLoginLink.findOne({
+      tokenHash: hashStaffLoginToken(token),
+      expiresAt: { $gt: new Date() },
+    });
+    if (!loginLink) {
+      return res.status(401).json({ success: false, error: "This login link is invalid or expired." });
+    }
+
+    const member = await BusinessMember.findOne({
+      _id: loginLink.memberId,
+      businessId: loginLink.businessId,
+      status: "active",
+    });
+    if (!member || member.passwordVersion !== loginLink.passwordVersion) {
+      return res.status(401).json({ success: false, error: "This login link is no longer valid." });
+    }
+
+    const business = await Business.findById(member.businessId);
+    if (!business || !business.active || !business.teamAccess?.staffLoginEnabled) {
+      return res.status(403).json({ success: false, error: "Business login disabled." });
+    }
+
+    const sessionId = `sess_${crypto.randomBytes(16).toString("hex")}`;
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + STAFF_SESSION_DAYS);
+
+    await StaffSession.create({
+      businessId: member.businessId,
+      memberId: member._id,
+      sessionId,
+      tokenVersion: member.passwordVersion,
+      deviceId: device.deviceId,
+      deviceName: device.deviceName,
+      platform: device.platform,
+      appVersion: device.appVersion,
+      ip: req.ip,
+      userAgent: req.headers["user-agent"],
+      expiresAt,
+    });
+
+    const appToken = createStaffToken(member, sessionId);
+
+    member.lastLoginAt = new Date();
+    member.lastSeenAt = new Date();
+    await member.save();
+
+    loginLink.lastUsedAt = new Date();
+    loginLink.usageCount += 1;
+    await loginLink.save();
+
+    await AuditLog.create({
+      businessId: member.businessId,
+      actorType: "staff",
+      actorMemberId: member._id,
+      actorName: member.name,
+      action: "auth.staff_link_login",
+      entityType: "BusinessMember",
+      entityId: member._id,
+      ip: req.ip,
+      userAgent: req.headers["user-agent"],
+    });
+
+    return res.json({
+      success: true,
+      token: appToken,
+      member: { ...member.toObject(), passwordHash: undefined },
+      business,
+      permissions: member.permissions,
+    });
+  } catch (error) {
+    console.error("❌ Staff link login error:", error);
     return res.status(500).json({ success: false, error: "Server error." });
   }
 }

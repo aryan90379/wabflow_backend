@@ -32,4 +32,5 @@ export const env = {
   whatsappDisplayNameChangeWindowDays: Number(process.env.WHATSAPP_DISPLAY_NAME_CHANGE_WINDOW_DAYS || 30),
   whatsappPin: process.env.WHATSAPP_2FA_PIN || "123456",
   tokenEncryptionKey: process.env.TOKEN_ENCRYPTION_KEY || "",
+  staffLoginLinkBaseUrl: process.env.STAFF_LOGIN_LINK_BASE_URL || "https://api.wabflow.synqra.in/api/auth/staff/open",
 };

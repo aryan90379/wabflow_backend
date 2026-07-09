@@ -12,6 +12,8 @@ import {
   updateMe,
   googleAuth,
   staffLogin,
+  staffLinkLogin,
+  openStaffLoginLink,
   staffLogout,
   deleteAccount,
   demoLogin,
@@ -27,6 +29,7 @@ import {
   deleteTeamMember,
   listMemberSessions,
   revokeMemberSession,
+  createMemberLoginLink,
   listAuditLogs
 } from "../controllers/teamController.js";
 import { requirePermission } from "../middleware/permissionMiddleware.js";
@@ -151,6 +154,8 @@ apiRouter.post("/auth/check-email", asyncHandler(checkEmail));
 apiRouter.post("/auth/link/google", authMiddleware, asyncHandler(linkGoogleAuth));
 apiRouter.post("/auth/link/apple", authMiddleware, asyncHandler(linkAppleAuth));
 apiRouter.post("/auth/staff/login", asyncHandler(staffLogin));
+apiRouter.post("/auth/staff/link-login", asyncHandler(staffLinkLogin));
+apiRouter.get("/auth/staff/open/:token", asyncHandler(openStaffLoginLink));
 apiRouter.post("/auth/staff/logout", authMiddleware, asyncHandler(staffLogout));
 apiRouter.post("/auth/demo-login", asyncHandler(demoLogin));
 apiRouter.get("/auth/me", authMiddleware, asyncHandler(getMe));
@@ -285,6 +290,7 @@ businessRouter.get("/team", requirePermission("team.view"), asyncHandler(listTea
 businessRouter.post("/team", requirePermission("team.create"), asyncHandler(createTeamMember));
 businessRouter.patch("/team/:memberId", requirePermission("team.edit"), asyncHandler(updateTeamMember));
 businessRouter.post("/team/:memberId/reset-password", requirePermission("team.resetPassword"), asyncHandler(resetMemberPassword));
+businessRouter.post("/team/:memberId/login-link", requirePermission("team.view"), asyncHandler(createMemberLoginLink));
 businessRouter.post("/team/:memberId/revoke", requirePermission("team.revoke"), asyncHandler(revokeMemberAccess));
 businessRouter.post("/team/:memberId/enable", requirePermission("team.edit"), asyncHandler(enableMemberAccess));
 businessRouter.post("/team/:memberId/disable", requirePermission("team.edit"), asyncHandler(disableMemberAccess));

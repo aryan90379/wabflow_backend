@@ -4,6 +4,7 @@ import { BusinessMember } from "../models/BusinessMember.js";
 import { Business } from "../models/Business.js";
 import { StaffSession } from "../models/StaffSession.js";
 import { AuditLog } from "../models/AuditLog.js";
+import { createStaffLoginLink } from "../services/staffLoginLinkService.js";
 
 // Helper to generate a strong password
 function generateTemporaryPassword() {
@@ -75,9 +76,17 @@ export async function createTeamMember(req, res) {
     after: { name, role }
   });
 
+  const loginLink = await createStaffLoginLink({
+    businessId,
+    member,
+    createdBy: req.actor.memberId || null,
+  });
+
   return res.json({
     success: true,
     member: { ...member.toObject(), passwordHash: undefined },
+    loginLink: loginLink.loginLink,
+    loginLinkExpiresAt: loginLink.expiresAt,
     credentials: {
       businessCode: bCode,
       staffCode,
@@ -131,8 +140,16 @@ export async function resetMemberPassword(req, res) {
 
   await logAudit(businessId, req.actor, "staff.password_regenerated", "BusinessMember", member._id);
 
+  const loginLink = await createStaffLoginLink({
+    businessId,
+    member,
+    createdBy: req.actor.memberId || null,
+  });
+
   return res.json({
     success: true,
+    loginLink: loginLink.loginLink,
+    loginLinkExpiresAt: loginLink.expiresAt,
     credentials: {
       businessCode: member.businessCode,
       staffCode: member.staffCode,
@@ -241,6 +258,28 @@ export async function revokeMemberSession(req, res) {
   await logAudit(businessId, req.actor, "staff.session_revoked", "StaffSession", session._id);
 
   return res.json({ success: true, session });
+}
+
+export async function createMemberLoginLink(req, res) {
+  const { businessId, memberId } = req.params;
+
+  const member = await BusinessMember.findOne({ _id: memberId, businessId, memberType: "staff" });
+  if (!member) return res.status(404).json({ success: false, error: "Member not found." });
+  if (member.status !== "active") return res.status(400).json({ success: false, error: "Staff member is not active." });
+
+  const loginLink = await createStaffLoginLink({
+    businessId,
+    member,
+    createdBy: req.actor.memberId || null,
+  });
+
+  await logAudit(businessId, req.actor, "staff.login_link_created", "BusinessMember", member._id);
+
+  return res.json({
+    success: true,
+    loginLink: loginLink.loginLink,
+    expiresAt: loginLink.expiresAt,
+  });
 }
 
 export async function listAuditLogs(req, res) {
