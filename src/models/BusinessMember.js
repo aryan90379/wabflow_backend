@@ -18,6 +18,11 @@ const permissionsSchema = new mongoose.Schema(
       view: { type: Boolean, default: false },
       edit: { type: Boolean, default: false },
     },
+    flows: {
+      view: { type: Boolean, default: false },
+      create: { type: Boolean, default: false },
+      edit: { type: Boolean, default: false },
+    },
   },
   { _id: false }
 );
