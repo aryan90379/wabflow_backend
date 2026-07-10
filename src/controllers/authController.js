@@ -144,33 +144,34 @@ export async function googleAuth(req, res) {
 }
 
 // ─── Demo Login (Apple Reviewer Backdoor) ───────────────────────────────────
-const DEMO_EMAIL    = "applereview@wabflow.com";
-const EXPIRED_DEMO_EMAIL = "expired@wabflow.com";
-const DEMO_PASSWORD = "WabFlowApple2026!";
+const DEMO_EMAIL = String(process.env.APPLE_REVIEW_DEMO_EMAIL || "").toLowerCase().trim();
+const EXPIRED_DEMO_EMAIL = String(process.env.APPLE_REVIEW_EXPIRED_DEMO_EMAIL || "").toLowerCase().trim();
+const DEMO_PASSWORD = String(process.env.APPLE_REVIEW_DEMO_PASSWORD || "");
 
-export async function demoLogin(req, res) {
-  const { email, password } = req.body;
+function getReviewerDemoTarget(token) {
+  const value = String(token || "").trim();
+  const normalToken = String(process.env.APPLE_REVIEW_DEMO_TOKEN || "").trim();
+  const expiredToken = String(process.env.APPLE_REVIEW_EXPIRED_DEMO_TOKEN || "").trim();
 
-  if (!email || !password) {
-    return res.status(400).json({ success: false, error: "Email and password are required." });
+  if (normalToken && DEMO_EMAIL && value === normalToken) {
+    return { email: DEMO_EMAIL, isExpired: false };
   }
 
-  const isNormalDemo = String(email).toLowerCase().trim() === DEMO_EMAIL && password === DEMO_PASSWORD;
-  const isExpiredDemo = String(email).toLowerCase().trim() === EXPIRED_DEMO_EMAIL && password === DEMO_PASSWORD;
-
-  if (!isNormalDemo && !isExpiredDemo) {
-    return res.status(401).json({ success: false, error: "Invalid demo credentials." });
+  if (expiredToken && EXPIRED_DEMO_EMAIL && value === expiredToken) {
+    return { email: EXPIRED_DEMO_EMAIL, isExpired: true };
   }
 
-  const targetEmail = isExpiredDemo ? EXPIRED_DEMO_EMAIL : DEMO_EMAIL;
+  return null;
+}
 
+async function signInDemoAccount(targetEmail, isExpiredDemo) {
   let user = await User.findOne({
     $or: [
       { email: targetEmail },
       { googleEmail: targetEmail },
     ],
   });
-  
+
   if (!user) {
     console.log("Demo user not found, creating a new one automatically...");
     user = await User.create({
@@ -180,14 +181,47 @@ export async function demoLogin(req, res) {
     });
   }
 
-  // Generate clean dummy data for this user
   await generateDummyData(user, { isExpired: isExpiredDemo });
 
-  return res.json({
+  return {
     success: true,
     token: createAppToken(user),
     user,
-  });
+  };
+}
+
+export async function demoLogin(req, res) {
+  const { email, password } = req.body;
+
+  if (!email || !password) {
+    return res.status(400).json({ success: false, error: "Email and password are required." });
+  }
+
+  if (!DEMO_EMAIL || !EXPIRED_DEMO_EMAIL || !DEMO_PASSWORD) {
+    return res.status(500).json({ success: false, error: "Demo login is not configured." });
+  }
+
+  const normalizedEmail = String(email).toLowerCase().trim();
+  const isNormalDemo = normalizedEmail === DEMO_EMAIL && password === DEMO_PASSWORD;
+  const isExpiredDemo = normalizedEmail === EXPIRED_DEMO_EMAIL && password === DEMO_PASSWORD;
+
+  if (!isNormalDemo && !isExpiredDemo) {
+    return res.status(401).json({ success: false, error: "Invalid demo credentials." });
+  }
+
+  const targetEmail = isExpiredDemo ? EXPIRED_DEMO_EMAIL : DEMO_EMAIL;
+
+  return res.json(await signInDemoAccount(targetEmail, isExpiredDemo));
+}
+
+export async function reviewerLogin(req, res) {
+  const target = getReviewerDemoTarget(req.body?.token);
+
+  if (!target) {
+    return res.status(401).json({ success: false, error: "Invalid reviewer access link." });
+  }
+
+  return res.json(await signInDemoAccount(target.email, target.isExpired));
 }
 
 export async function linkGoogleAuth(req, res) {
@@ -635,11 +669,27 @@ function buildAndroidStaffIntent(token) {
   return `intent://staff-login?token=${encodeURIComponent(token)}#Intent;scheme=wabflow;end`;
 }
 
+function buildReviewerDeepLink(token) {
+  return `wabflow://review-login/${encodeURIComponent(token)}`;
+}
+
+function buildAndroidReviewerIntent(token) {
+  return `intent://review-login/${encodeURIComponent(token)}#Intent;scheme=wabflow;end`;
+}
+
 export async function openStaffLoginLink(req, res) {
   const { token } = req.params;
   if (!token) return res.status(400).send("Missing staff login token.");
 
   const userAgent = req.headers["user-agent"] || "";
+  if (getReviewerDemoTarget(token)) {
+    const reviewTarget = /Android/i.test(userAgent)
+      ? buildAndroidReviewerIntent(token)
+      : buildReviewerDeepLink(token);
+
+    return res.redirect(302, reviewTarget);
+  }
+
   const target = /Android/i.test(userAgent)
     ? buildAndroidStaffIntent(token)
     : buildStaffDeepLink(token);

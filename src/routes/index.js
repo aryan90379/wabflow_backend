@@ -17,6 +17,7 @@ import {
   staffLogout,
   deleteAccount,
   demoLogin,
+  reviewerLogin,
 } from "../controllers/authController.js";
 import {
   listTeamMembers,
@@ -159,6 +160,7 @@ apiRouter.post("/auth/staff/link-login", asyncHandler(staffLinkLogin));
 apiRouter.get("/auth/staff/open/:token", asyncHandler(openStaffLoginLink));
 apiRouter.post("/auth/staff/logout", authMiddleware, asyncHandler(staffLogout));
 apiRouter.post("/auth/demo-login", asyncHandler(demoLogin));
+apiRouter.post("/auth/reviewer-login", asyncHandler(reviewerLogin));
 apiRouter.get("/auth/me", authMiddleware, asyncHandler(getMe));
 apiRouter.patch("/auth/me", authMiddleware, asyncHandler(updateMe));
 apiRouter.delete("/auth/me", authMiddleware, asyncHandler(deleteAccount));
