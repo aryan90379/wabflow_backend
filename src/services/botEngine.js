@@ -34,6 +34,7 @@ import {
   prepareBookingFlowImages,
 } from "./metaFlowService.js";
 import { notificationService } from "./NotificationService.js";
+import { ensureLeadForBooking } from "./leadService.js";
 
 function hashFlowDefinition(flowJson) {
   return crypto
@@ -174,6 +175,7 @@ async function handleBookingFlowReply({ business, account, contact, conversation
     customFields: parsedCustomFields,
     metadata,
   });
+  await ensureLeadForBooking(booking);
 
   await sendAndSaveMessage({
     account,

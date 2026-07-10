@@ -10,6 +10,7 @@ import { ListItem } from "../models/ListItem.js";
 import { interpolate, normalizeText } from "../utils/text.js";
 import { createHandoff, sendAndSaveMessage } from "./conversationService.js";
 import { broadcastToBusiness } from "./socketService.js";
+import { ensureLeadForBooking } from "./leadService.js";
 
 const MAX_NODE_STEPS = 25;
 
@@ -290,6 +291,7 @@ async function getOrCreateBooking(context, defaults = {}) {
       ...defaults,
     });
     context.conversation.botState.variables.set("_bookingId", String(booking._id));
+    await ensureLeadForBooking(booking);
     broadcastToBusiness(String(context.business._id), "booking_created", booking);
   }
 
@@ -328,6 +330,7 @@ async function saveAnswer(context, awaiting, value) {
       if (roomType) booking.metadata.set("roomType", roomType);
     }
     await booking.save();
+    await ensureLeadForBooking(booking);
     broadcastToBusiness(String(context.business._id), "booking_updated", booking);
   }
 }
@@ -383,12 +386,14 @@ async function executeAction(node, context) {
     const booking = await getOrCreateBooking(context, config);
     Object.assign(booking, config);
     await booking.save();
+    await ensureLeadForBooking(booking);
   }
 
   if (actionType === "update_booking") {
     const booking = await getOrCreateBooking(context);
     Object.assign(booking, config);
     await booking.save();
+    await ensureLeadForBooking(booking);
   }
 
   if (actionType === "close_conversation") {
@@ -511,6 +516,7 @@ async function processWaitingInputV2(flow, context) {
       booking.metadata.set("appointmentReason", String(data.appointmentReason || rawServiceItemId));
     }
     await booking.save();
+    await ensureLeadForBooking(booking);
     
     context.conversation.botState.awaitingInput = null;
     context.conversation.botState.currentNodeId = awaiting.nextNodeId || step.config?.nextStepId || null;

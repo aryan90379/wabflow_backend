@@ -9,6 +9,11 @@ import {
 } from "../models/index.js";
 import { broadcastToBusiness } from "../services/socketService.js";
 import { prepareBookingReminders } from "../services/bookingReminderService.js";
+import {
+  backfillLeadsFromBookings,
+  backfillLeadsFromConversations,
+  ensureLeadForBooking,
+} from "../services/leadService.js";
 
 function pagination(req) {
   const page = Math.max(1, Number(req.query.page || 1));
@@ -114,7 +119,7 @@ async function backfillBookingsFromFlowReplies(businessId) {
       }
     });
 
-    await Booking.create({
+    const booking = await Booking.create({
       businessId,
       contactId: message.contactId,
       conversationId: message.conversationId,
@@ -132,10 +137,14 @@ async function backfillBookingsFromFlowReplies(businessId) {
         ...(!serviceItemId && rawServiceItemId ? [["appointmentReason", String(responseJson.appointmentReason || rawServiceItemId)]] : []),
       ]),
     });
+    await ensureLeadForBooking(booking);
   }
 }
 
 export async function listLeads(req, res) {
+  await backfillBookingsFromFlowReplies(req.business._id);
+  await backfillLeadsFromBookings(req.business._id);
+  await backfillLeadsFromConversations(req.business._id);
   const result = await listModel(Lead, req, { createdAt: -1 }, [
     { path: "contactId", select: "name phone waId tags leadStage notes customFields" },
     { path: "conversationId", select: "status lastMessage lastMessageAt unreadCount botState" },
@@ -210,6 +219,7 @@ export async function updateBooking(req, res) {
   );
   if (!booking) return res.status(404).json({ success: false, error: "Booking not found." });
   await prepareBookingReminders(booking);
+  await ensureLeadForBooking(booking);
   broadcastToBusiness(req.business._id.toString(), "booking_updated", booking);
   return res.json({ success: true, booking, data: booking });
 }
@@ -223,6 +233,7 @@ export async function createBooking(req, res) {
     businessId: req.business._id,
   });
   await prepareBookingReminders(booking);
+  await ensureLeadForBooking(booking);
   
   broadcastToBusiness(req.business._id.toString(), "booking_created", booking);
   return res.status(201).json({ success: true, booking, data: booking });

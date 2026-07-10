@@ -27,5 +27,6 @@ const leadSchema = new mongoose.Schema(
 );
 
 leadSchema.index({ businessId: 1, status: 1, createdAt: -1 });
+leadSchema.index({ businessId: 1, contactId: 1, conversationId: 1 });
 
 export const Lead = mongoose.models.Lead || mongoose.model("Lead", leadSchema);

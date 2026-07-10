@@ -9,6 +9,7 @@ import { broadcastToBusiness } from "./socketService.js";
 import { broadcastRawToBusiness } from "./rawChatSocketService.js";
 import { notificationService } from "./NotificationService.js";
 import { normalizeBroadcastPhone } from "../utils/phone.js";
+import { ensureLeadForInboundMessage } from "./leadService.js";
 
 const MAP_URL_PATTERN = /https?:\/\/(?:maps\.app\.goo\.gl|(?:www\.)?google\.[^\s/]+\/maps|goo\.gl\/maps)\/\S+/i;
 
@@ -134,6 +135,9 @@ export async function saveInboundMessage({ account, contact, conversation, event
   // Also if this is literally the very first message ever for this conversation:
   const messageCount = await Message.countDocuments({ conversationId: conversation._id });
   const isFirstMessage = messageCount <= 1; // <= 1 because we just created the message above
+  if (isFirstMessage) {
+    await ensureLeadForInboundMessage({ account, contact, conversation, message });
+  }
 
   const shouldNotifyForChat = conversation.status === "human_needed" || conversation.botState?.active === false;
 
