@@ -5,6 +5,7 @@ import { Business } from "../models/Business.js";
 import { StaffSession } from "../models/StaffSession.js";
 import { AuditLog } from "../models/AuditLog.js";
 import { createStaffLoginLink } from "../services/staffLoginLinkService.js";
+import { permissionsForRole } from "../utils/rolePermissions.js";
 
 // Helper to generate a strong password
 function generateTemporaryPassword() {
@@ -67,7 +68,7 @@ export async function createTeamMember(req, res) {
     businessCode: bCode,
     passwordHash,
     currentPassword: password,
-    permissions: permissions || {},
+    permissions: permissionsForRole(role, permissions),
     createdBy: req.actor.memberId || null,
   });
 
@@ -106,7 +107,7 @@ export async function updateTeamMember(req, res) {
 
   if (name) member.name = name;
   if (role) member.role = role;
-  if (permissions) member.permissions = permissions;
+  if (role || permissions) member.permissions = permissionsForRole(member.role, permissions || member.permissions);
   if (status) member.status = status;
   if (notes !== undefined) member.notes = notes;
   if (avatarUrl !== undefined) member.avatarUrl = avatarUrl;

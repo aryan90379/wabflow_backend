@@ -3,6 +3,7 @@ import { env } from "../config/env.js";
 import { StaffSession } from "../models/StaffSession.js";
 import { BusinessMember } from "../models/BusinessMember.js";
 import { User } from "../models/User.js";
+import { permissionsForRole } from "../utils/rolePermissions.js";
 
 export async function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization || "";
@@ -38,7 +39,7 @@ export async function authMiddleware(req, res, next) {
       req.authType = "staff";
       req.memberId = member._id;
       req.businessId = member.businessId;
-      req.permissions = member.permissions;
+      req.permissions = permissionsForRole(member.role, member.permissions);
       req.sessionId = session.sessionId;
       req.actor = {
         type: "staff",

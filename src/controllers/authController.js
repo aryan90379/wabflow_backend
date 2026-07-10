@@ -13,6 +13,7 @@ import { StaffLoginLink } from "../models/StaffLoginLink.js";
 import { env } from "../config/env.js";
 import { generateDummyData } from "../services/dummyDataService.js";
 import { hashStaffLoginToken } from "../services/staffLoginLinkService.js";
+import { permissionsForRole } from "../utils/rolePermissions.js";
 
 const googleClient = new OAuth2Client();
 const STAFF_SESSION_DAYS = 365;
@@ -482,6 +483,7 @@ export async function getMe(req, res) {
       const member = await BusinessMember.findById(req.memberId).select("-passwordHash");
       const business = await Business.findById(req.businessId);
       if (!member) return res.status(404).json({ success: false, error: "Member not found." });
+      const permissions = permissionsForRole(member.role, member.permissions);
 
       const refreshedExpiresAt = new Date();
       refreshedExpiresAt.setDate(refreshedExpiresAt.getDate() + STAFF_SESSION_DAYS);
@@ -496,7 +498,7 @@ export async function getMe(req, res) {
         token: createStaffToken(member, req.sessionId),
         member,
         business,
-        permissions: member.permissions
+        permissions
       });
     }
 
@@ -594,6 +596,7 @@ export async function staffLogin(req, res) {
     });
 
     const token = createStaffToken(member, sessionId);
+    const permissions = permissionsForRole(member.role, member.permissions);
 
     member.lastLoginAt = new Date();
     member.lastSeenAt = new Date();
@@ -616,7 +619,7 @@ export async function staffLogin(req, res) {
       token,
       member: { ...member.toObject(), passwordHash: undefined },
       business,
-      permissions: member.permissions
+      permissions
     });
   } catch (error) {
     console.error("❌ Staff login error:", error);
@@ -692,6 +695,7 @@ export async function staffLinkLogin(req, res) {
     });
 
     const appToken = createStaffToken(member, sessionId);
+    const permissions = permissionsForRole(member.role, member.permissions);
 
     member.lastLoginAt = new Date();
     member.lastSeenAt = new Date();
@@ -718,7 +722,7 @@ export async function staffLinkLogin(req, res) {
       token: appToken,
       member: { ...member.toObject(), passwordHash: undefined },
       business,
-      permissions: member.permissions,
+      permissions,
     });
   } catch (error) {
     console.error("❌ Staff link login error:", error);

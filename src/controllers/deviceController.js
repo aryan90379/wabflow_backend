@@ -1,17 +1,10 @@
 import { StaffSession } from "../models/StaffSession.js";
 import { Business } from "../models/Business.js";
 import { BusinessMember } from "../models/BusinessMember.js";
+import { fullPermissions } from "../utils/rolePermissions.js";
 import crypto from "crypto";
 
 const PUSH_SESSION_DAYS = 365;
-
-function fullPermissions() {
-  return {
-    inbox: { view: true, reply: true, manage: true },
-    team: { view: true, create: true, edit: true, revoke: true, resetPassword: true },
-    settings: { view: true, edit: true },
-  };
-}
 
 function pushSessionExpiry() {
   const expiresAt = new Date();
