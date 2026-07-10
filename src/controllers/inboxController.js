@@ -569,7 +569,8 @@ export async function listMessages(req, res) {
     createdAt: { $lt: before },
   })
     .sort({ createdAt: -1 })
-    .limit(limit);
+    .limit(limit)
+    .lean();
 
   const data = messages.reverse();
   return res.json({
@@ -835,7 +836,8 @@ export async function syncMessages(req, res) {
 
   const messages = await Message.find(filter)
     .sort(afterSequence > 0 ? { serverSequence: 1, createdAt: 1 } : { createdAt: 1 })
-    .limit(limit);
+    .limit(limit)
+    .lean();
 
   const hasMore = messages.length === limit;
   const nextSequence = messages.reduce((max, message) => {
