@@ -147,17 +147,17 @@ export async function googleAuth(req, res) {
 const DEMO_EMAIL = String(process.env.APPLE_REVIEW_DEMO_EMAIL || "").toLowerCase().trim();
 const EXPIRED_DEMO_EMAIL = String(process.env.APPLE_REVIEW_EXPIRED_DEMO_EMAIL || "").toLowerCase().trim();
 const DEMO_PASSWORD = String(process.env.APPLE_REVIEW_DEMO_PASSWORD || "");
+const APPLE_REVIEW_DEMO_TOKEN = String(process.env.APPLE_REVIEW_DEMO_TOKEN || "").trim();
+const APPLE_REVIEW_EXPIRED_DEMO_TOKEN = String(process.env.APPLE_REVIEW_EXPIRED_DEMO_TOKEN || "").trim();
 
 function getReviewerDemoTarget(token) {
   const value = String(token || "").trim();
-  const normalToken = String(process.env.APPLE_REVIEW_DEMO_TOKEN || "").trim();
-  const expiredToken = String(process.env.APPLE_REVIEW_EXPIRED_DEMO_TOKEN || "").trim();
 
-  if (normalToken && DEMO_EMAIL && value === normalToken) {
+  if (APPLE_REVIEW_DEMO_TOKEN && DEMO_EMAIL && value === APPLE_REVIEW_DEMO_TOKEN) {
     return { email: DEMO_EMAIL, isExpired: false };
   }
 
-  if (expiredToken && EXPIRED_DEMO_EMAIL && value === expiredToken) {
+  if (APPLE_REVIEW_EXPIRED_DEMO_TOKEN && EXPIRED_DEMO_EMAIL && value === APPLE_REVIEW_EXPIRED_DEMO_TOKEN) {
     return { email: EXPIRED_DEMO_EMAIL, isExpired: true };
   }
 
