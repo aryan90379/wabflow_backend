@@ -104,6 +104,7 @@ import {
   updateFollowUp,
   updateHandoff,
   updateLead,
+  updateContact,
 } from "../controllers/crmController.js";
 import {
   getLists,
@@ -266,6 +267,8 @@ businessRouter.patch("/conversations/:conversationId/assign", requirePermission(
 businessRouter.get("/leads", requirePermission("inbox.view"), asyncHandler(listLeads));
 businessRouter.get("/leads/:leadId", requirePermission("inbox.view"), asyncHandler(getLead));
 businessRouter.patch("/leads/:leadId", requirePermission("inbox.manage"), asyncHandler(updateLead));
+
+businessRouter.patch("/contacts/:contactId", requirePermission("inbox.manage"), asyncHandler(updateContact));
 businessRouter.get("/bookings", requirePermission("inbox.view"), asyncHandler(listBookings));
 businessRouter.post("/bookings", requirePermission("inbox.manage"), asyncHandler(createBooking));
 businessRouter.get("/bookings/:bookingId", requirePermission("inbox.view"), asyncHandler(getBooking));

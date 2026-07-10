@@ -6,6 +6,7 @@ import {
   FollowUpTask,
   HandoffRequest,
   BotDecisionLog,
+  Contact,
 } from "../models/index.js";
 import { broadcastToBusiness } from "../services/socketService.js";
 import { prepareBookingReminders } from "../services/bookingReminderService.js";
@@ -179,6 +180,18 @@ export async function updateLead(req, res) {
   );
   if (!lead) return res.status(404).json({ success: false, error: "Lead not found." });
   return res.json({ success: true, lead, data: lead });
+}
+
+export async function updateContact(req, res) {
+  const allowed = ["name", "email", "notes", "tags", "customFields"];
+  const update = Object.fromEntries(Object.entries(req.body).filter(([key]) => allowed.includes(key)));
+  const contact = await Contact.findOneAndUpdate(
+    { _id: req.params.contactId, businessId: req.business._id },
+    { $set: update },
+    { new: true, runValidators: true }
+  );
+  if (!contact) return res.status(404).json({ success: false, error: "Contact not found." });
+  return res.json({ success: true, contact, data: contact });
 }
 
 export async function listBookings(req, res) {
