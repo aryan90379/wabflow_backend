@@ -38,6 +38,7 @@ export async function authMiddleware(req, res, next) {
 
       req.authType = "staff";
       req.memberId = member._id;
+      req.memberRole = member.role;
       req.businessId = member.businessId;
       req.permissions = permissionsForRole(member.role, member.permissions);
       req.sessionId = session.sessionId;

@@ -1,7 +1,7 @@
 export function requirePermission(permissionPath) {
   return (req, res, next) => {
-    // Owners always have full access
-    if (req.authType === "owner") {
+    // Owners and admin staff always have full access.
+    if (req.authType === "owner" || (req.authType === "staff" && req.memberRole === "admin")) {
       return next();
     }
 
