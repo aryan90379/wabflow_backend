@@ -4,6 +4,7 @@ const broadcastJobSchema = new mongoose.Schema(
   {
     businessId: { type: mongoose.Schema.Types.ObjectId, ref: "Business", required: true, index: true },
     templateId: { type: mongoose.Schema.Types.ObjectId, ref: "WhatsappMessageTemplate", required: true },
+    templateSnapshot: { type: mongoose.Schema.Types.Mixed, default: null },
     whatsappAccountId: { type: mongoose.Schema.Types.ObjectId, ref: "WhatsappAccount", required: true },
     createdByUserId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     createdByMemberId: { type: mongoose.Schema.Types.ObjectId, ref: "BusinessMember" },

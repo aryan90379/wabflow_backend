@@ -46,6 +46,11 @@ const bookingSchema = new mongoose.Schema(
     customerName: { type: String, default: "" },
     customerPhone: { type: String, default: "" },
     notes: { type: String, default: "" },
+    cardTheme: {
+      type: String,
+      enum: ["emerald", "jade", "sapphire", "amethyst", "rose_gold", "obsidian"],
+      default: "emerald",
+    },
     customFields: {
       type: [
         {

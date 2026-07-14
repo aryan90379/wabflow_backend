@@ -130,10 +130,22 @@ export async function createBroadcast(req, res) {
       status: template.status,
     });
   }
-  if (template.category === "AUTHENTICATION") {
+  if (template.category !== "MARKETING") {
     return res.status(400).json({
       success: false,
-      error: "Authentication templates are reserved for OTP flows and cannot be used as campaigns.",
+      error: "Campaigns can only use approved Marketing templates. Utility and Authentication templates are not eligible.",
+    });
+  }
+
+  const hasUnmappedParameters =
+    /\{\{\s*\d+\s*\}\}/.test(String(template.body || "")) ||
+    (template.buttons || []).some(
+      (button) => button.type === "URL" && /\{\{\s*\d+\s*\}\}/.test(String(button.url || ""))
+    );
+  if (hasUnmappedParameters) {
+    return res.status(400).json({
+      success: false,
+      error: "This template needs recipient-specific values. Campaign variable mapping is required before it can be sent.",
     });
   }
 
@@ -157,6 +169,19 @@ export async function createBroadcast(req, res) {
   const job = await BroadcastJob.create({
     businessId: req.business._id,
     templateId: template._id,
+    templateSnapshot: {
+      name: template.name,
+      displayName: template.displayName,
+      format: template.format,
+      category: template.category,
+      language: template.language,
+      body: template.body,
+      footer: template.footer,
+      headerType: template.headerType,
+      headerImageUrl: template.headerImageUrl,
+      buttons: template.buttons,
+      carouselCards: template.carouselCards,
+    },
     whatsappAccountId: template.whatsappAccountId,
     createdByUserId: req.userId || undefined,
     createdByMemberId: req.memberId || undefined,

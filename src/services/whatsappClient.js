@@ -188,6 +188,21 @@ export async function sendWhatsappTemplatePayload(
     });
   }
 
+  (template.buttons || []).forEach((button, index) => {
+    if (String(button.type || "QUICK_REPLY").toUpperCase() !== "QUICK_REPLY") return;
+    components.push({
+      type: "button",
+      sub_type: "quick_reply",
+      index: String(index),
+      parameters: [
+        {
+          type: "payload",
+          payload: String(button.id || `button_${index + 1}`).slice(0, 256),
+        },
+      ],
+    });
+  });
+
   if (template.format === "CAROUSEL" && template.carouselCards?.length) {
     components.push({
       type: "carousel",
