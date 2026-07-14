@@ -4,6 +4,23 @@ const templateButtonSchema = new mongoose.Schema(
   {
     id: { type: String, default: "" },
     title: { type: String, required: true, trim: true, maxlength: 25 },
+    type: {
+      type: String,
+      enum: ["QUICK_REPLY", "URL", "PHONE_NUMBER"],
+      default: "QUICK_REPLY",
+    },
+    url: { type: String, default: "", trim: true },
+    phoneNumber: { type: String, default: "", trim: true },
+  },
+  { _id: false }
+);
+
+const carouselCardSchema = new mongoose.Schema(
+  {
+    mediaType: { type: String, enum: ["IMAGE", "VIDEO"], default: "IMAGE" },
+    mediaUrl: { type: String, required: true, trim: true },
+    body: { type: String, default: "", trim: true, maxlength: 160 },
+    buttons: { type: [templateButtonSchema], default: [] },
   },
   { _id: false }
 );
@@ -21,9 +38,14 @@ const whatsappMessageTemplateSchema = new mongoose.Schema(
     metaTemplateId: { type: String, default: "", index: true },
     name: { type: String, required: true, trim: true, lowercase: true },
     displayName: { type: String, required: true, trim: true },
+    format: {
+      type: String,
+      enum: ["STANDARD", "CAROUSEL"],
+      default: "STANDARD",
+    },
     category: {
       type: String,
-      enum: ["MARKETING", "UTILITY"],
+      enum: ["MARKETING", "UTILITY", "AUTHENTICATION"],
       default: "MARKETING",
     },
     language: { type: String, default: "en_US" },
@@ -31,11 +53,12 @@ const whatsappMessageTemplateSchema = new mongoose.Schema(
     footer: { type: String, default: "", trim: true, maxlength: 60 },
     headerType: {
       type: String,
-      enum: ["NONE", "IMAGE"],
+      enum: ["NONE", "IMAGE", "VIDEO", "DOCUMENT"],
       default: "NONE",
     },
     headerImageUrl: { type: String, default: "", trim: true },
     buttons: { type: [templateButtonSchema], default: [] },
+    carouselCards: { type: [carouselCardSchema], default: [] },
     status: {
       type: String,
       enum: ["draft", "pending", "approved", "rejected", "paused", "disabled", "unknown"],

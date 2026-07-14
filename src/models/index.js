@@ -20,3 +20,4 @@ export { Notification } from "./Notification.js";
 export { QrShortLink } from "./QrShortLink.js";
 export { SupportTicket } from "./SupportTicket.js";
 export { SupportMessage } from "./SupportMessage.js";
+export { AdvancedBotInquiry } from "./AdvancedBotInquiry.js";

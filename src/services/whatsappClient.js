@@ -163,13 +163,14 @@ export async function sendWhatsappTemplatePayload(
 
   const components = [];
 
-  if (template.headerType === "IMAGE" && template.headerImageUrl) {
+  if (["IMAGE", "VIDEO", "DOCUMENT"].includes(template.headerType) && template.headerImageUrl) {
+    const mediaType = String(template.headerType).toLowerCase();
     components.push({
       type: "header",
       parameters: [
         {
-          type: "image",
-          image: {
+          type: mediaType,
+          [mediaType]: {
             link: template.headerImageUrl,
           },
         },
@@ -183,6 +184,28 @@ export async function sendWhatsappTemplatePayload(
       parameters: bodyParameters.map((value) => ({
         type: "text",
         text: String(value ?? ""),
+      })),
+    });
+  }
+
+  if (template.format === "CAROUSEL" && template.carouselCards?.length) {
+    components.push({
+      type: "carousel",
+      cards: template.carouselCards.map((card, index) => ({
+        card_index: index,
+        components: [
+          {
+            type: "header",
+            parameters: [
+              {
+                type: String(card.mediaType || "IMAGE").toLowerCase(),
+                [String(card.mediaType || "IMAGE").toLowerCase()]: {
+                  link: card.mediaUrl,
+                },
+              },
+            ],
+          },
+        ],
       })),
     });
   }

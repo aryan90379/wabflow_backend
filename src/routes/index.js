@@ -2,6 +2,7 @@ import { Router } from "express";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 import { requireBusinessAccess } from "../middleware/requireBusinessAccess.js";
+import { requireDeveloperAccess } from "../middleware/requireDeveloperAccess.js";
 
 import {
   appleAuth,
@@ -129,6 +130,12 @@ import {
   getUnreadTicketStatus,
   sendMessage,
 } from "../controllers/supportController.js";
+import {
+  adminGetAdvancedBotInquiry,
+  adminListAdvancedBotInquiries,
+  adminUpdateAdvancedBotInquiry,
+  createAdvancedBotInquiry,
+} from "../controllers/advancedBotInquiryController.js";
 
 import { generateBookingFlow } from "../controllers/metaFlowController.js";
 import { receiveWebhook, verifyWebhook } from "../controllers/webhookController.js";
@@ -181,6 +188,11 @@ apiRouter.get("/admin/support-tickets/:ticketId", authMiddleware, asyncHandler(a
 apiRouter.patch("/admin/support-tickets/:ticketId", authMiddleware, asyncHandler(adminUpdateTicket));
 apiRouter.get("/admin/support-tickets/:ticketId/messages", authMiddleware, asyncHandler(adminGetMessages));
 apiRouter.post("/admin/support-tickets/:ticketId/messages", authMiddleware, asyncHandler(adminSendMessage));
+
+// --- Advanced Bot Build Inquiries (Admin) ---
+apiRouter.get("/admin/advanced-bot-inquiries", authMiddleware, requireDeveloperAccess, asyncHandler(adminListAdvancedBotInquiries));
+apiRouter.get("/admin/advanced-bot-inquiries/:inquiryId", authMiddleware, requireDeveloperAccess, asyncHandler(adminGetAdvancedBotInquiry));
+apiRouter.patch("/admin/advanced-bot-inquiries/:inquiryId", authMiddleware, requireDeveloperAccess, asyncHandler(adminUpdateAdvancedBotInquiry));
 
 // --- Device ---
 apiRouter.use("/device", deviceRoutes);
@@ -289,6 +301,7 @@ businessRouter.post("/support-tickets", requirePermission("settings.edit"), asyn
 businessRouter.get("/support-tickets/:ticketId", requirePermission("settings.view"), asyncHandler(getTicket));
 businessRouter.get("/support-tickets/:ticketId/messages", requirePermission("settings.view"), asyncHandler(getMessages));
 businessRouter.post("/support-tickets/:ticketId/messages", requirePermission("settings.edit"), asyncHandler(sendMessage));
+businessRouter.post("/advanced-bot-inquiries", requirePermission("settings.edit"), asyncHandler(createAdvancedBotInquiry));
 
 // Team & Access
 businessRouter.get("/team", requirePermission("team.view"), asyncHandler(listTeamMembers));

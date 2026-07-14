@@ -82,19 +82,70 @@ function slugifyTemplateName(value = "") {
 }
 
 function sanitizeButtons(buttons = []) {
-  return buttons
-    .map((button, index) => ({
-      id: String(button.id || `button_${index + 1}`).trim() || `button_${index + 1}`,
-      title: String(button.title || button.label || "").trim().slice(0, 25),
+  const validButtons = buttons
+    .map((button, index) => {
+      const type = ["URL", "PHONE_NUMBER"].includes(String(button.type || "").toUpperCase())
+        ? String(button.type).toUpperCase()
+        : "QUICK_REPLY";
+      return {
+        id: String(button.id || `button_${index + 1}`).trim() || `button_${index + 1}`,
+        title: String(button.title || button.label || "").trim().slice(0, 25),
+        type,
+        url: type === "URL" ? String(button.url || "").trim() : "",
+        phoneNumber: type === "PHONE_NUMBER" ? String(button.phoneNumber || "").trim() : "",
+      };
+    })
+    .filter((button) => {
+      if (!button.title) return false;
+      if (button.type === "URL") return /^https:\/\/\S+/i.test(button.url);
+      if (button.type === "PHONE_NUMBER") return /^\+?[\d\s()-]{8,20}$/.test(button.phoneNumber);
+      return true;
+    });
+
+  if (!validButtons.length) return [];
+
+  const quickReplyGroup = validButtons[0].type === "QUICK_REPLY";
+  if (quickReplyGroup) {
+    return validButtons
+      .filter((button) => button.type === "QUICK_REPLY")
+      .slice(0, 10);
+  }
+
+  let urlCount = 0;
+  let phoneCount = 0;
+  return validButtons
+    .filter((button) => {
+      if (button.type === "QUICK_REPLY") return false;
+      if (button.type === "URL") {
+        if (urlCount >= 2) return false;
+        urlCount += 1;
+        return true;
+      }
+      if (phoneCount >= 1) return false;
+      phoneCount += 1;
+      return true;
+    })
+    .slice(0, 2);
+}
+
+function sanitizeCarouselCards(cards = []) {
+  return cards
+    .map((card) => ({
+      mediaType: String(card.mediaType || "IMAGE").toUpperCase() === "VIDEO" ? "VIDEO" : "IMAGE",
+      mediaUrl: String(card.mediaUrl || "").trim(),
+      body: String(card.body || "").trim().slice(0, 160),
+      buttons: sanitizeButtons(card.buttons).slice(0, 2),
     }))
-    .filter((button) => button.title)
+    .filter((card) => /^https:\/\/\S+/i.test(card.mediaUrl) && card.body && card.buttons.length)
     .slice(0, 10);
 }
 
-function imageContentTypeFromUrl(url = "") {
+function mediaContentTypeFromUrl(url = "") {
   const lower = String(url || "").toLowerCase();
   if (lower.endsWith(".png")) return "image/png";
   if (lower.endsWith(".webp")) return "image/webp";
+  if (lower.endsWith(".mp4")) return "video/mp4";
+  if (lower.endsWith(".pdf")) return "application/pdf";
   return "image/jpeg";
 }
 
@@ -137,21 +188,27 @@ async function uploadMetaFileBytes({ accessToken, uploadSessionId, buffer }) {
   return result.h;
 }
 
-async function uploadTemplateHeaderImageHandle(imageUrl, accessToken) {
-  const imageResponse = await fetch(imageUrl);
-  if (!imageResponse.ok) {
-    throw new Error(`Could not fetch template image URL. Status ${imageResponse.status}`);
+async function uploadTemplateHeaderMediaHandle(mediaUrl, accessToken, expectedType = "IMAGE") {
+  const mediaResponse = await fetch(mediaUrl);
+  if (!mediaResponse.ok) {
+    throw new Error(`Could not fetch template media URL. Status ${mediaResponse.status}`);
   }
 
   const contentType =
-    imageResponse.headers.get("content-type")?.split(";")[0]?.trim() ||
-    imageContentTypeFromUrl(imageUrl);
+    mediaResponse.headers.get("content-type")?.split(";")[0]?.trim() ||
+    mediaContentTypeFromUrl(mediaUrl);
 
-  if (!/^image\/(jpeg|jpg|png|webp)$/i.test(contentType)) {
-    throw new Error(`Template image must be a JPEG, PNG, or WebP image. Got ${contentType}.`);
+  const allowed =
+    expectedType === "VIDEO"
+      ? /^video\/mp4$/i.test(contentType)
+      : expectedType === "DOCUMENT"
+        ? /^application\/pdf$/i.test(contentType)
+        : /^image\/(jpeg|jpg|png|webp)$/i.test(contentType);
+  if (!allowed) {
+    throw new Error(`Template ${expectedType.toLowerCase()} has an unsupported content type: ${contentType}.`);
   }
 
-  const buffer = Buffer.from(await imageResponse.arrayBuffer());
+  const buffer = Buffer.from(await mediaResponse.arrayBuffer());
   const uploadSession = await createMetaUploadSession({
     accessToken,
     fileLength: buffer.length,
@@ -219,13 +276,32 @@ function validateTemplateBody(body = "") {
   return errors;
 }
 
-function buildMetaTemplateComponents({ body, footer, buttons, headerType, headerImageHandle }) {
+function toMetaButton(button) {
+  if (button.type === "URL") {
+    return { type: "URL", text: button.title, url: button.url };
+  }
+  if (button.type === "PHONE_NUMBER") {
+    return { type: "PHONE_NUMBER", text: button.title, phone_number: button.phoneNumber };
+  }
+  return { type: "QUICK_REPLY", text: button.title };
+}
+
+function buildMetaTemplateComponents({
+  body,
+  footer,
+  buttons,
+  headerType,
+  headerImageHandle,
+  format = "STANDARD",
+  carouselCards = [],
+  carouselHandles = [],
+}) {
   const components = [];
 
-  if (headerType === "IMAGE" && headerImageHandle) {
+  if (format === "STANDARD" && headerType !== "NONE" && headerImageHandle) {
     components.push({
       type: "HEADER",
-      format: "IMAGE",
+      format: headerType,
       example: {
         header_handle: [headerImageHandle],
       },
@@ -244,19 +320,33 @@ function buildMetaTemplateComponents({ body, footer, buttons, headerType, header
   }
   components.push(bodyComponent);
 
-  if (footer) {
+  if (format === "STANDARD" && footer) {
     components.push({
       type: "FOOTER",
       text: footer,
     });
   }
 
-  if (buttons.length) {
+  if (format === "STANDARD" && buttons.length) {
     components.push({
       type: "BUTTONS",
-      buttons: buttons.map((button) => ({
-        type: "QUICK_REPLY",
-        text: button.title,
+      buttons: buttons.map(toMetaButton),
+    });
+  }
+
+  if (format === "CAROUSEL") {
+    components.push({
+      type: "CAROUSEL",
+      cards: carouselCards.map((card, index) => ({
+        components: [
+          {
+            type: "HEADER",
+            format: card.mediaType,
+            example: { header_handle: [carouselHandles[index]] },
+          },
+          { type: "BODY", text: card.body },
+          { type: "BUTTONS", buttons: card.buttons.map(toMetaButton) },
+        ],
       })),
     });
   }
@@ -269,9 +359,35 @@ function parseMetaTemplateComponents(components = []) {
   const bodyComponent = components.find((component) => component.type === "BODY");
   const footerComponent = components.find((component) => component.type === "FOOTER");
   const buttonComponent = components.find((component) => component.type === "BUTTONS");
-  const headerType = headerComponent?.format === "IMAGE" ? "IMAGE" : "NONE";
+  const carouselComponent = components.find((component) => component.type === "CAROUSEL");
+  const headerType = ["IMAGE", "VIDEO", "DOCUMENT"].includes(headerComponent?.format)
+    ? headerComponent.format
+    : "NONE";
+
+  const carouselCards = (carouselComponent?.cards || []).map((card) => {
+    const cardHeader = card.components?.find((component) => component.type === "HEADER");
+    const cardBody = card.components?.find((component) => component.type === "BODY");
+    const cardButtons = card.components?.find((component) => component.type === "BUTTONS");
+    return {
+      mediaType: cardHeader?.format === "VIDEO" ? "VIDEO" : "IMAGE",
+      mediaUrl: String(
+        cardHeader?.example?.header_url?.[0] ||
+          cardHeader?.example?.header_handle?.[0] ||
+          ""
+      ),
+      body: String(cardBody?.text || "").slice(0, 160),
+      buttons: (cardButtons?.buttons || []).map((button, index) => ({
+        id: `card_button_${index + 1}`,
+        title: String(button.text || "Action").slice(0, 25),
+        type: ["URL", "PHONE_NUMBER"].includes(button.type) ? button.type : "QUICK_REPLY",
+        url: button.url || "",
+        phoneNumber: button.phone_number || "",
+      })),
+    };
+  });
 
   return {
+    format: carouselCards.length ? "CAROUSEL" : "STANDARD",
     headerType,
     headerImageUrl: String(
       headerComponent?.example?.header_handle?.[0] ||
@@ -281,11 +397,15 @@ function parseMetaTemplateComponents(components = []) {
     body: String(bodyComponent?.text || "").trim(),
     footer: String(footerComponent?.text || "").trim(),
     buttons: (buttonComponent?.buttons || [])
-      .filter((button) => button.type === "QUICK_REPLY" && button.text)
+      .filter((button) => button.text)
       .map((button, index) => ({
         id: `button_${index + 1}`,
         title: String(button.text).slice(0, 25),
+        type: ["URL", "PHONE_NUMBER"].includes(button.type) ? button.type : "QUICK_REPLY",
+        url: button.url || "",
+        phoneNumber: button.phone_number || "",
       })),
+    carouselCards,
   };
 }
 
@@ -320,11 +440,13 @@ async function syncBusinessTemplates(businessId) {
               language: item.language || "en_US",
               status: normalizeTemplateStatus(item.status),
               rejectionReason: item.rejected_reason || "",
+              format: parsed.format,
               headerType: parsed.headerType,
               headerImageUrl: parsed.headerImageUrl,
               body: parsed.body || "Synced from Meta.",
               ...(parsed.footer ? { footer: parsed.footer } : {}),
               ...(parsed.buttons.length ? { buttons: parsed.buttons } : {}),
+              ...(parsed.carouselCards.length ? { carouselCards: parsed.carouselCards } : {}),
               lastSyncedAt: new Date(),
             },
             $setOnInsert: {
@@ -412,7 +534,15 @@ export async function createWhatsappMessageTemplate(req, res) {
   const body = String(req.body.body || "").trim();
   const footer = String(req.body.footer || "").trim().slice(0, 60);
   const buttons = sanitizeButtons(req.body.buttons);
-  const headerType = req.body.headerType === "IMAGE" ? "IMAGE" : "NONE";
+  const format = req.body.format === "CAROUSEL" ? "CAROUSEL" : "STANDARD";
+  const carouselCards = format === "CAROUSEL"
+    ? sanitizeCarouselCards(req.body.carouselCards)
+    : [];
+  const requestedHeaderType = String(req.body.headerType || "NONE").toUpperCase();
+  const headerType =
+    format === "STANDARD" && ["IMAGE", "VIDEO", "DOCUMENT"].includes(requestedHeaderType)
+      ? requestedHeaderType
+      : "NONE";
   const headerImageUrl = String(req.body.headerImageUrl || "").trim();
   const category = String(req.body.category || "MARKETING").toUpperCase() === "UTILITY"
     ? "UTILITY"
@@ -431,18 +561,46 @@ export async function createWhatsappMessageTemplate(req, res) {
     });
   }
 
-  if (headerType === "IMAGE" && !/^https:\/\/\S+/i.test(headerImageUrl)) {
+  if (headerType !== "NONE" && !/^https:\/\/\S+/i.test(headerImageUrl)) {
     return res.status(400).json({
       success: false,
-      error: "Image templates need a public HTTPS image URL.",
+      error: "Media templates need a public HTTPS media URL.",
+    });
+  }
+
+  if (format === "CAROUSEL" && category !== "MARKETING") {
+    return res.status(400).json({
+      success: false,
+      error: "Carousel campaigns must use the Marketing category.",
+    });
+  }
+
+  if (format === "CAROUSEL" && carouselCards.length < 2) {
+    return res.status(400).json({
+      success: false,
+      error: "A carousel needs at least 2 complete cards with an image, text, and action.",
     });
   }
 
   const { accessToken } = await getWhatsappAccountWithToken(account._id);
-  const headerImageHandle = headerType === "IMAGE"
-    ? await uploadTemplateHeaderImageHandle(headerImageUrl, accessToken)
+  const headerImageHandle = headerType !== "NONE"
+    ? await uploadTemplateHeaderMediaHandle(headerImageUrl, accessToken, headerType)
     : "";
-  const components = buildMetaTemplateComponents({ body, footer, buttons, headerType, headerImageHandle });
+  const carouselHandles = format === "CAROUSEL"
+    ? await Promise.all(
+        carouselCards.map((card) => uploadTemplateHeaderMediaHandle(card.mediaUrl, accessToken, card.mediaType))
+      )
+    : [];
+  const components = buildMetaTemplateComponents({
+    body,
+    footer,
+    buttons,
+    headerType,
+    headerImageHandle,
+    format,
+    carouselCards,
+    carouselHandles,
+  });
 
   const result = await readMetaJson(
     await fetch(`${GRAPH_BASE}/${account.wabaId}/message_templates`, {
@@ -470,13 +628,17 @@ export async function createWhatsappMessageTemplate(req, res) {
         wabaId: account.wabaId,
         metaTemplateId: result.id || result.template_id || "",
         displayName,
-        category,
+        format,
+        category: ["MARKETING", "UTILITY", "AUTHENTICATION"].includes(String(result.category || "").toUpperCase())
+          ? String(result.category).toUpperCase()
+          : category,
         language: req.body.language || "en_US",
         body,
         footer,
         headerType,
         headerImageUrl,
         buttons,
+        carouselCards,
         status: normalizeTemplateStatus(result.status || "pending"),
         rejectionReason: "",
         lastSubmittedAt: new Date(),

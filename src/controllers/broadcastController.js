@@ -3,6 +3,7 @@ import { broadcastQueue } from "../workers/broadcastWorker.js";
 import { normalizeBroadcastPhone } from "../utils/phone.js";
 import { broadcastToBusiness } from "../services/socketService.js";
 import { broadcastRawToBusiness } from "../services/rawChatSocketService.js";
+import { estimateWhatsAppPricing } from "../utils/whatsappPricing.js";
 
 const MAX_BROADCAST_RECIPIENTS = Number(process.env.MAX_BROADCAST_RECIPIENTS || 5000);
 
@@ -58,7 +59,7 @@ function normalizeRecipientInput(recipients = [], defaultCountryCode = "91") {
 }
 
 export async function listBroadcasts(req, res) {
-  const limit = Math.min(20, Math.max(1, Number(req.query.limit || 5)));
+  const limit = Math.min(100, Math.max(1, Number(req.query.limit || 50)));
   const jobs = await BroadcastJob.find({ businessId: req.business._id })
     .sort({ createdAt: -1 })
     .limit(limit)
@@ -129,6 +130,12 @@ export async function createBroadcast(req, res) {
       status: template.status,
     });
   }
+  if (template.category === "AUTHENTICATION") {
+    return res.status(400).json({
+      success: false,
+      error: "Authentication templates are reserved for OTP flows and cannot be used as campaigns.",
+    });
+  }
 
   const defaultCountryCode = normalizeCountryCode(req.body.defaultCountryCode);
   const inputRecipients = Array.isArray(req.body.recipients) ? req.body.recipients : [];
@@ -145,6 +152,8 @@ export async function createBroadcast(req, res) {
     });
   }
 
+  const pricingSnapshot = estimateWhatsAppPricing(valid, template.category);
+
   const job = await BroadcastJob.create({
     businessId: req.business._id,
     templateId: template._id,
@@ -155,6 +164,7 @@ export async function createBroadcast(req, res) {
     defaultCountryCode,
     totalCount: valid.length,
     queuedCount: valid.length,
+    ...pricingSnapshot,
   });
 
   await BroadcastRecipient.insertMany(valid.map((recipient) => ({

@@ -128,7 +128,10 @@ export async function sendApprovedTemplateMessage({
     whatsappAccountId: account._id,
     direction: "outbound",
     senderType: "bot",
-    type: template.buttons?.length ? "button" : "text",
+    type:
+      template.buttons?.length || template.carouselCards?.length
+        ? "button"
+        : "text",
     text: renderedText,
     status: "queued",
   });
