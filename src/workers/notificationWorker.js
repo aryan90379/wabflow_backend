@@ -24,8 +24,43 @@ const notificationCopy = {
   NEW_LEAD: { title: "New lead captured", channelId: "wabflow_updates" },
   NEW_BOOKING: { title: "New booking request", channelId: "wabflow_bookings" },
   HUMAN_HANDOFF: { title: "Human handoff requested", channelId: "wabflow_messages" },
+  TASK_REMINDER: { title: "Task reminder", channelId: "wabflow_updates" },
+  CAMPAIGN_UPDATE: { title: "Campaign update", channelId: "wabflow_updates" },
   SYSTEM: { title: "WabFlow update", channelId: "wabflow_updates" },
 };
+
+const notificationPreferenceByType = {
+  NEW_CHAT: "messages",
+  NEW_MESSAGE: "messages",
+  NEW_LEAD: "leads",
+  NEW_BOOKING: "bookings",
+  HUMAN_HANDOFF: "handoffs",
+  TASK_REMINDER: "tasks",
+  CAMPAIGN_UPDATE: "campaigns",
+  SYSTEM: "systemUpdates",
+};
+
+function preferencesForSession(session) {
+  const stored = session.notificationPreferences || {};
+  return {
+    enabled: stored.enabled !== false,
+    sound: stored.sound !== false,
+    vibration: stored.vibration !== false,
+    [notificationPreferenceByType.NEW_CHAT]: stored.messages !== false,
+    leads: stored.leads !== false,
+    bookings: stored.bookings !== false,
+    handoffs: stored.handoffs !== false,
+    tasks: stored.tasks !== false,
+    campaigns: stored.campaigns !== false,
+    systemUpdates: stored.systemUpdates !== false,
+  };
+}
+
+function sessionAllowsNotification(session, type) {
+  const preferences = preferencesForSession(session);
+  const category = notificationPreferenceByType[type] || "systemUpdates";
+  return preferences.enabled && preferences[category] !== false;
+}
 
 function getNotificationThread(notification, payload) {
   if (payload.conversationId) {
@@ -51,7 +86,7 @@ async function getThreadNotificationCount(notification, thread) {
   });
 }
 
-async function buildPushMessage(notification, tokens) {
+async function buildPushMessage(notification, tokens, deliveryPreferences = {}) {
   const copy = notificationCopy[notification.type] || notificationCopy.SYSTEM;
   const title = notification.title || copy.title;
   const body = notification.body || "Open WabFlow for details.";
@@ -76,8 +111,8 @@ async function buildPushMessage(notification, tokens) {
         channelId: copy.channelId,
         icon: "ic_stat_wabflow_nodes",
         color: "#22C55E",
-        sound: "default",
-        defaultSound: true,
+        ...(deliveryPreferences.sound === false ? {} : { sound: "default", defaultSound: true }),
+        defaultVibrateTimings: deliveryPreferences.vibration !== false,
         priority: "high",
         visibility: "public",
         tag: thread.tag,
@@ -87,7 +122,7 @@ async function buildPushMessage(notification, tokens) {
     apns: {
       payload: {
         aps: {
-          sound: "default",
+          ...(deliveryPreferences.sound === false ? {} : { sound: "default" }),
           "thread-id": thread.tag,
         },
       },
@@ -131,28 +166,48 @@ export const notificationWorker = new Worker(
         return;
       }
 
-      // 3. Extract unique push tokens
-      const tokens = [...new Set(sessions.map((s) => s.pushToken))];
+      const eligibleSessions = sessions.filter(session => sessionAllowsNotification(session, notification.type));
+      if (eligibleSessions.length === 0) {
+        console.log(`[Worker] SUPPRESSED: '${notification.type}' is disabled on every registered device.`);
+        notification.status = "sent";
+        notification.error = "Suppressed by notification preferences";
+        await notification.save();
+        return;
+      }
 
-      // 4. Construct Firebase Payload
-      const message = await buildPushMessage(notification, tokens);
+      // Group devices with matching delivery settings so sound/vibration remain device-specific.
+      const groups = new Map();
+      eligibleSessions.forEach(session => {
+        const preferences = preferencesForSession(session);
+        const key = `${preferences.sound}:${preferences.vibration}`;
+        const current = groups.get(key) || { preferences, tokens: new Set() };
+        current.tokens.add(session.pushToken);
+        groups.set(key, current);
+      });
 
-      // 5. Send via Firebase Admin
-      console.log(`[Worker] Dispatching FCM message to ${tokens.length} unique tokens...`);
-      const response = await messaging.sendEachForMulticast(message);
-      
-      console.log(`[Worker] ✅ Sent push notification! Success: ${response.successCount}, Failed: ${response.failureCount}`);
+      let successCount = 0;
+      let failureCount = 0;
+      const failedTokens = [];
+
+      for (const { preferences, tokens: tokenSet } of groups.values()) {
+        const tokens = [...tokenSet];
+        const message = await buildPushMessage(notification, tokens, preferences);
+        console.log(`[Worker] Dispatching FCM message to ${tokens.length} eligible device(s)...`);
+        const response = await messaging.sendEachForMulticast(message);
+        successCount += response.successCount;
+        failureCount += response.failureCount;
+        response.responses.forEach((resp, idx) => {
+          if (!resp.success) {
+            failedTokens.push(tokens[idx]);
+            console.error(`[Worker] Error sending to token ${tokens[idx]}: ${resp.error}`);
+          }
+        });
+      }
+
+      console.log(`[Worker] ✅ Push result! Success: ${successCount}, Failed: ${failureCount}`);
       console.log(`========================================\n`);
 
       // Optional: Cleanup invalid tokens based on responses
-      const failedTokens = [];
-      response.responses.forEach((resp, idx) => {
-        if (!resp.success) {
-          failedTokens.push(tokens[idx]);
-          console.error(`[Worker] Error sending to token ${tokens[idx]}: ${resp.error}`);
-        }
-      });
-
       if (failedTokens.length > 0) {
         // Remove invalid tokens from StaffSession
         await StaffSession.updateMany(
@@ -161,7 +216,7 @@ export const notificationWorker = new Worker(
         );
       }
 
-      if (response.successCount > 0) {
+      if (successCount > 0) {
         notification.status = "sent";
       } else {
         notification.status = "failed";

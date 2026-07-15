@@ -6,6 +6,28 @@ import crypto from "crypto";
 
 const PUSH_SESSION_DAYS = 365;
 
+const DEFAULT_NOTIFICATION_PREFERENCES = Object.freeze({
+  enabled: true,
+  messages: true,
+  leads: true,
+  bookings: true,
+  handoffs: true,
+  tasks: true,
+  campaigns: true,
+  systemUpdates: true,
+  sound: true,
+  vibration: true,
+});
+
+function sanitizeNotificationPreferences(value = {}) {
+  return Object.fromEntries(
+    Object.entries(DEFAULT_NOTIFICATION_PREFERENCES).map(([key, fallback]) => [
+      key,
+      typeof value?.[key] === "boolean" ? value[key] : fallback,
+    ])
+  );
+}
+
 function pushSessionExpiry() {
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + PUSH_SESSION_DAYS);
@@ -107,6 +129,59 @@ export const registerPushToken = async (req, res) => {
   } catch (error) {
     console.error("[DeviceController] Error registering push token:", error);
     res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
+async function getCurrentDeviceSessions(req, pushToken) {
+  if (req.authType === "staff" && req.sessionId) {
+    return StaffSession.find({ sessionId: req.sessionId, status: "active" });
+  }
+
+  if (req.authType === "owner" && req.userId && pushToken) {
+    const businesses = await Business.find({ ownerId: req.userId, active: true }).select("_id");
+    const members = await BusinessMember.find({
+      businessId: { $in: businesses.map(item => item._id) },
+      userId: req.userId,
+      memberType: "owner",
+    }).select("_id");
+    return StaffSession.find({
+      memberId: { $in: members.map(item => item._id) },
+      pushToken,
+      status: "active",
+    });
+  }
+
+  return [];
+}
+
+export const getNotificationPreferences = async (req, res) => {
+  try {
+    const sessions = await getCurrentDeviceSessions(req, String(req.query.pushToken || ""));
+    const preferences = sanitizeNotificationPreferences(sessions[0]?.notificationPreferences || {});
+    return res.status(200).json({ success: true, data: preferences });
+  } catch (error) {
+    console.error("[DeviceController] Error reading notification preferences:", error);
+    return res.status(500).json({ success: false, message: "Could not load notification preferences." });
+  }
+};
+
+export const updateNotificationPreferences = async (req, res) => {
+  try {
+    const pushToken = String(req.body?.pushToken || "");
+    const sessions = await getCurrentDeviceSessions(req, pushToken);
+    if (sessions.length === 0) {
+      return res.status(404).json({ success: false, message: "Current device is not registered for notifications." });
+    }
+
+    const preferences = sanitizeNotificationPreferences(req.body?.preferences || {});
+    await StaffSession.updateMany(
+      { _id: { $in: sessions.map(item => item._id) } },
+      { $set: { notificationPreferences: preferences } }
+    );
+    return res.status(200).json({ success: true, data: preferences });
+  } catch (error) {
+    console.error("[DeviceController] Error updating notification preferences:", error);
+    return res.status(500).json({ success: false, message: "Could not save notification preferences." });
   }
 };
 import { WhatsappMessageTemplate, Message, Contact } from "../models/index.js";
