@@ -135,6 +135,7 @@ import {
   adminListAdvancedBotInquiries,
   adminUpdateAdvancedBotInquiry,
   createAdvancedBotInquiry,
+  listAdvancedBotInquiries,
 } from "../controllers/advancedBotInquiryController.js";
 
 import { generateBookingFlow } from "../controllers/metaFlowController.js";
@@ -302,6 +303,7 @@ businessRouter.get("/support-tickets/:ticketId", requirePermission("settings.vie
 businessRouter.get("/support-tickets/:ticketId/messages", requirePermission("settings.view"), asyncHandler(getMessages));
 businessRouter.post("/support-tickets/:ticketId/messages", requirePermission("settings.edit"), asyncHandler(sendMessage));
 businessRouter.post("/advanced-bot-inquiries", requirePermission("settings.edit"), asyncHandler(createAdvancedBotInquiry));
+businessRouter.get("/advanced-bot-inquiries", requirePermission("settings.view"), asyncHandler(listAdvancedBotInquiries));
 
 // Team & Access
 businessRouter.get("/team", requirePermission("team.view"), asyncHandler(listTeamMembers));

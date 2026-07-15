@@ -52,6 +52,13 @@ export const createAdvancedBotInquiry = async (req, res) => {
   res.status(201).json(inquiry);
 };
 
+export const listAdvancedBotInquiries = async (req, res) => {
+  const inquiries = await AdvancedBotInquiry.find({ businessId: req.business._id })
+    .sort({ createdAt: -1 });
+
+  res.json(inquiries);
+};
+
 export const adminListAdvancedBotInquiries = async (req, res) => {
   const inquiries = await AdvancedBotInquiry.find({})
     .sort({ createdAt: -1 })
