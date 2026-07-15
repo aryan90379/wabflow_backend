@@ -143,6 +143,10 @@ import { generateBookingFlow } from "../controllers/metaFlowController.js";
 import { receiveWebhook, verifyWebhook } from "../controllers/webhookController.js";
 import { getTutorials, updateTutorials } from "../controllers/tutorialController.js";
 import {
+  getMetaConnectContent,
+  updateMetaConnectContent,
+} from "../controllers/appContentController.js";
+import {
   createQrShortLink,
   getQrShortLinkAnalytics,
   listQrShortLinks,
@@ -182,6 +186,15 @@ apiRouter.get("/public/qr-links/:slug", asyncHandler(resolvePublicQrShortLink));
 // --- Tutorials ---
 apiRouter.get("/tutorials", authMiddleware, asyncHandler(getTutorials));
 apiRouter.post("/tutorials", authMiddleware, asyncHandler(updateTutorials));
+
+// --- General app content ---
+apiRouter.get("/app-content/meta-connect", authMiddleware, asyncHandler(getMetaConnectContent));
+apiRouter.put(
+  "/admin/app-content/meta-connect",
+  authMiddleware,
+  requireDeveloperAccess,
+  asyncHandler(updateMetaConnectContent)
+);
 
 // --- Support Tickets (Admin) ---
 // Note: We protect these with authMiddleware. In a real scenario we might add an isAdmin middleware.

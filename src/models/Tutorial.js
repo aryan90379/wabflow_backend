@@ -2,9 +2,15 @@ import mongoose from "mongoose";
 
 const tutorialSchema = new mongoose.Schema(
   {
-    title: { type: String, required: true },
+    title: { type: String, default: "" },
+    titleEn: { type: String, default: "" },
+    titleHi: { type: String, default: "" },
     description: { type: String, default: "" },
-    url: { type: String, required: true },
+    descriptionEn: { type: String, default: "" },
+    descriptionHi: { type: String, default: "" },
+    url: { type: String, default: "" },
+    urlEn: { type: String, default: "" },
+    urlHi: { type: String, default: "" },
     thumbnail: { type: String, default: "" },
   },
   { timestamps: true }

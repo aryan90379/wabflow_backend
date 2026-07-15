@@ -6,9 +6,15 @@ export const getTutorials = async (req, res) => {
   // Map _id to id for the frontend
   const formatted = tutorials.map(t => ({
     id: t._id.toString(),
-    title: t.title,
-    description: t.description,
-    url: t.url,
+    title: t.titleEn || t.title || "",
+    description: t.descriptionEn || t.description || "",
+    url: t.urlEn || t.url || "",
+    titleEn: t.titleEn || t.title || "",
+    titleHi: t.titleHi || t.titleEn || t.title || "",
+    descriptionEn: t.descriptionEn || t.description || "",
+    descriptionHi: t.descriptionHi || t.descriptionEn || t.description || "",
+    urlEn: t.urlEn || t.url || "",
+    urlHi: t.urlHi || t.urlEn || t.url || "",
     thumbnail: t.thumbnail,
     createdAt: new Date(t.createdAt).getTime(),
   }));
@@ -38,9 +44,15 @@ export const updateTutorials = async (req, res) => {
   
   // Insert new list
   const docs = tutorials.map(t => ({
-    title: t.title,
-    description: t.description,
-    url: t.url,
+    title: String(t.titleEn || t.title || "").trim(),
+    titleEn: String(t.titleEn || t.title || "").trim(),
+    titleHi: String(t.titleHi || t.titleEn || t.title || "").trim(),
+    description: String(t.descriptionEn || t.description || "").trim(),
+    descriptionEn: String(t.descriptionEn || t.description || "").trim(),
+    descriptionHi: String(t.descriptionHi || t.descriptionEn || t.description || "").trim(),
+    url: String(t.urlEn || t.url || "").trim(),
+    urlEn: String(t.urlEn || t.url || "").trim(),
+    urlHi: String(t.urlHi || t.urlEn || t.url || "").trim(),
     thumbnail: t.thumbnail,
     createdAt: t.createdAt ? new Date(t.createdAt) : new Date(),
   }));

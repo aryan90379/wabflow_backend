@@ -21,3 +21,4 @@ export { QrShortLink } from "./QrShortLink.js";
 export { SupportTicket } from "./SupportTicket.js";
 export { SupportMessage } from "./SupportMessage.js";
 export { AdvancedBotInquiry } from "./AdvancedBotInquiry.js";
+export { AppContent } from "./AppContent.js";
