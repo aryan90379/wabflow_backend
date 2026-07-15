@@ -135,6 +135,7 @@ import {
   adminListAdvancedBotInquiries,
   adminUpdateAdvancedBotInquiry,
   createAdvancedBotInquiry,
+  getAdvancedBotInquiry,
   listAdvancedBotInquiries,
 } from "../controllers/advancedBotInquiryController.js";
 
@@ -304,6 +305,7 @@ businessRouter.get("/support-tickets/:ticketId/messages", requirePermission("set
 businessRouter.post("/support-tickets/:ticketId/messages", requirePermission("settings.edit"), asyncHandler(sendMessage));
 businessRouter.post("/advanced-bot-inquiries", requirePermission("settings.edit"), asyncHandler(createAdvancedBotInquiry));
 businessRouter.get("/advanced-bot-inquiries", requirePermission("settings.view"), asyncHandler(listAdvancedBotInquiries));
+businessRouter.get("/advanced-bot-inquiries/:inquiryId", requirePermission("settings.view"), asyncHandler(getAdvancedBotInquiry));
 
 // Team & Access
 businessRouter.get("/team", requirePermission("team.view"), asyncHandler(listTeamMembers));

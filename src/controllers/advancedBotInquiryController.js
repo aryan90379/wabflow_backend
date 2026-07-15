@@ -59,6 +59,19 @@ export const listAdvancedBotInquiries = async (req, res) => {
   res.json(inquiries);
 };
 
+export const getAdvancedBotInquiry = async (req, res) => {
+  const inquiry = await AdvancedBotInquiry.findOne({
+    _id: req.params.inquiryId,
+    businessId: req.business._id,
+  });
+
+  if (!inquiry) {
+    return res.status(404).json({ error: "Advanced bot inquiry not found" });
+  }
+
+  res.json(inquiry);
+};
+
 export const adminListAdvancedBotInquiries = async (req, res) => {
   const inquiries = await AdvancedBotInquiry.find({})
     .sort({ createdAt: -1 })
