@@ -141,9 +141,12 @@ import {
 
 import { generateBookingFlow } from "../controllers/metaFlowController.js";
 import { receiveWebhook, verifyWebhook } from "../controllers/webhookController.js";
+import { verifyWebhook as razorpayWebhook } from "../controllers/razorpay.controller.js";
 import { getTutorials, updateTutorials } from "../controllers/tutorialController.js";
 import {
+  getListsTutorialContent,
   getMetaConnectContent,
+  updateListsTutorialContent,
   updateMetaConnectContent,
 } from "../controllers/appContentController.js";
 import {
@@ -180,6 +183,11 @@ apiRouter.delete("/auth/me", authMiddleware, asyncHandler(deleteAccount));
 
 apiRouter.get("/webhooks/whatsapp", verifyWebhook);
 apiRouter.post("/webhooks/whatsapp", receiveWebhook);
+apiRouter.post("/webhooks/razorpay", razorpayWebhook);
+
+// Razorpay global create subscription endpoint for web
+import { createSubscription } from "../controllers/razorpay.controller.js";
+apiRouter.post("/razorpay/create-subscription", asyncHandler(createSubscription));
 
 apiRouter.get("/public/qr-links/:slug", asyncHandler(resolvePublicQrShortLink));
 
@@ -194,6 +202,13 @@ apiRouter.put(
   authMiddleware,
   requireDeveloperAccess,
   asyncHandler(updateMetaConnectContent)
+);
+apiRouter.get("/app-content/lists-tutorial", authMiddleware, asyncHandler(getListsTutorialContent));
+apiRouter.put(
+  "/admin/app-content/lists-tutorial",
+  authMiddleware,
+  requireDeveloperAccess,
+  asyncHandler(updateListsTutorialContent)
 );
 
 // --- Support Tickets (Admin) ---

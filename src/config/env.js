@@ -33,4 +33,8 @@ export const env = {
   whatsappPin: process.env.WHATSAPP_2FA_PIN || "123456",
   tokenEncryptionKey: process.env.TOKEN_ENCRYPTION_KEY || "",
   staffLoginLinkBaseUrl: process.env.STAFF_LOGIN_LINK_BASE_URL || "https://api.wabflow.synqra.in/s",
+  razorpayKeyId: process.env.RAZORPAY_KEY_ID || "",
+  razorpayKeySecret: process.env.RAZORPAY_KEY_SECRET || "",
+  razorpayPlanId: process.env.RAZORPAY_PLAN_ID || "",
+  razorpayWebhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET || "",
 };

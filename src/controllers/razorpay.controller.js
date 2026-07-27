@@ -1,0 +1,148 @@
+import Razorpay from 'razorpay';
+import crypto from 'crypto';
+import jwt from 'jsonwebtoken';
+import { env } from '../config/env.js';
+import { Business } from '../models/Business.js';
+
+let razorpayInstance = null;
+const getRazorpayInstance = () => {
+  if (!razorpayInstance && env.razorpayKeyId && env.razorpayKeySecret) {
+    razorpayInstance = new Razorpay({
+      key_id: env.razorpayKeyId,
+      key_secret: env.razorpayKeySecret,
+    });
+  }
+  return razorpayInstance;
+};
+
+// Generates a short-lived token for the web checkout redirect
+export const generateCheckoutToken = async (req, res) => {
+  try {
+    const businessId = req.business?._id || req.business?.id;
+    if (!businessId) {
+      return res.status(403).json({ success: false, error: 'Unauthorized: Business ID not found' });
+    }
+
+    // Generate a 15-minute token containing the businessId
+    const checkoutToken = jwt.sign(
+      { businessId, purpose: 'razorpay-checkout' },
+      env.jwtSecret(),
+      { expiresIn: '15m' }
+    );
+
+    return res.status(200).json({ success: true, checkoutToken });
+  } catch (error) {
+    console.error('Error in generateCheckoutToken:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+};
+
+// Creates a Razorpay subscription when called by the web checkout page
+export const createSubscription = async (req, res) => {
+  try {
+    const { checkoutToken } = req.body;
+
+    if (!checkoutToken) {
+      return res.status(400).json({ success: false, error: 'Checkout token is required' });
+    }
+
+    // Verify token
+    let decoded;
+    try {
+      decoded = jwt.verify(checkoutToken, env.jwtSecret());
+    } catch (err) {
+      return res.status(401).json({ success: false, error: 'Invalid or expired checkout token' });
+    }
+
+    if (decoded.purpose !== 'razorpay-checkout' || !decoded.businessId) {
+      return res.status(401).json({ success: false, error: 'Invalid token purpose' });
+    }
+
+    const businessId = decoded.businessId;
+    const business = await Business.findById(businessId);
+    if (!business) {
+      return res.status(404).json({ success: false, error: 'Business not found' });
+    }
+
+    const rzp = getRazorpayInstance();
+    if (!rzp) {
+      return res.status(500).json({ success: false, error: 'Razorpay is not configured' });
+    }
+
+    if (!env.razorpayPlanId) {
+      return res.status(500).json({ success: false, error: 'Razorpay Plan ID is not configured' });
+    }
+
+    // Optional: create a customer in Razorpay first or just create the subscription
+    // Assuming standard subscription creation
+    const subscriptionData = {
+      plan_id: env.razorpayPlanId,
+      total_count: 120, // 10 years of monthly billing (example limit)
+      customer_notify: 1,
+      notes: {
+        businessId: businessId.toString(),
+      }
+    };
+
+    const subscription = await rzp.subscriptions.create(subscriptionData);
+
+    return res.status(200).json({ 
+      success: true, 
+      subscriptionId: subscription.id,
+      keyId: env.razorpayKeyId,
+    });
+
+  } catch (error) {
+    console.error('Error in createSubscription:', error);
+    res.status(500).json({ success: false, error: 'Failed to create subscription' });
+  }
+};
+
+// Webhook to catch successful payments
+export const verifyWebhook = async (req, res) => {
+  try {
+    const signature = req.headers['x-razorpay-signature'];
+    const webhookSecret = env.razorpayWebhookSecret;
+    const payload = JSON.stringify(req.body);
+
+    if (!webhookSecret) {
+      console.warn('Razorpay webhook secret not configured, skipping verification for testing.');
+    } else {
+      const expectedSignature = crypto.createHmac('sha256', webhookSecret)
+        .update(payload)
+        .digest('hex');
+
+      if (expectedSignature !== signature) {
+        return res.status(400).json({ success: false, error: 'Invalid webhook signature' });
+      }
+    }
+
+    const event = req.body.event;
+    
+    // We listen to subscription.charged or subscription.authenticated
+    if (event === 'subscription.charged') {
+      const subscription = req.body.payload.subscription.entity;
+      const businessId = subscription.notes?.businessId;
+
+      if (businessId) {
+        // Upgrade the user to the starter plan and add 30 days
+        await Business.findByIdAndUpdate(
+          businessId,
+          {
+            $set: {
+              'subscription.plan': 'starter',
+              'subscription.validUntil': new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+              'subscription.razorpaySubscriptionId': subscription.id,
+            }
+          }
+        );
+        console.log(`Successfully upgraded business ${businessId} via Razorpay webhook.`);
+      }
+    }
+
+    res.status(200).json({ success: true });
+  } catch (error) {
+    console.error('Error handling Razorpay webhook:', error);
+    res.status(500).json({ success: false, error: 'Webhook processing failed' });
+  }
+};
