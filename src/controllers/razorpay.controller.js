@@ -100,21 +100,28 @@ export const createSubscription = async (req, res) => {
 
 // Webhook to catch successful payments
 export const verifyWebhook = async (req, res) => {
+  console.log('🔔 [RAZORPAY WEBHOOK] Received webhook request!');
+  
   try {
     const signature = req.headers['x-razorpay-signature'];
     const webhookSecret = env.razorpayWebhookSecret;
     const payload = JSON.stringify(req.body);
 
+    console.log(`🔔 [RAZORPAY WEBHOOK] Event type: ${req.body?.event}`);
+    console.log(`🔔 [RAZORPAY WEBHOOK] Payload:`, req.body);
+
     if (!webhookSecret) {
-      console.warn('Razorpay webhook secret not configured, skipping verification for testing.');
+      console.warn('⚠️ [RAZORPAY WEBHOOK] Secret not configured, skipping verification for testing.');
     } else {
       const expectedSignature = crypto.createHmac('sha256', webhookSecret)
         .update(payload)
         .digest('hex');
 
       if (expectedSignature !== signature) {
+        console.error('❌ [RAZORPAY WEBHOOK] Signature mismatch! Expected:', expectedSignature, 'Got:', signature);
         return res.status(400).json({ success: false, error: 'Invalid webhook signature' });
       }
+      console.log('✅ [RAZORPAY WEBHOOK] Signature verified successfully.');
     }
 
     const event = req.body.event;
@@ -123,6 +130,8 @@ export const verifyWebhook = async (req, res) => {
     if (event === 'subscription.charged') {
       const subscription = req.body.payload.subscription.entity;
       const businessId = subscription.notes?.businessId;
+
+      console.log(`🔔 [RAZORPAY WEBHOOK] Processing subscription.charged for business: ${businessId}`);
 
       if (businessId) {
         // Upgrade the user to the starter plan and add 30 days
@@ -136,13 +145,17 @@ export const verifyWebhook = async (req, res) => {
             }
           }
         );
-        console.log(`Successfully upgraded business ${businessId} via Razorpay webhook.`);
+        console.log(`🎉 [RAZORPAY WEBHOOK] Successfully upgraded business ${businessId} via Razorpay webhook.`);
+      } else {
+        console.error('❌ [RAZORPAY WEBHOOK] Missing businessId in subscription notes!');
       }
+    } else {
+      console.log(`🔔 [RAZORPAY WEBHOOK] Ignoring unhandled event type: ${event}`);
     }
 
     res.status(200).json({ success: true });
   } catch (error) {
-    console.error('Error handling Razorpay webhook:', error);
+    console.error('❌ [RAZORPAY WEBHOOK] Error handling webhook:', error);
     res.status(500).json({ success: false, error: 'Webhook processing failed' });
   }
 };
