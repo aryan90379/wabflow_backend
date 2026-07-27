@@ -5,6 +5,8 @@ import { BusinessMember } from "../models/BusinessMember.js";
 import { User } from "../models/User.js";
 import { permissionsForRole } from "../utils/rolePermissions.js";
 
+
+
 export async function authMiddleware(req, res, next) {
   const authHeader = req.headers.authorization || "";
 
