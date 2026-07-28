@@ -1,6 +1,6 @@
 import express from 'express';
 import { verifyAppleReceipt, verifyGooglePurchase } from '../controllers/subscription.controller.js';
-import { generateCheckoutToken, verifyRazorpaySync } from '../controllers/razorpay.controller.js';
+import { generateCheckoutToken, verifyRazorpaySync, cancelRazorpaySubscription } from '../controllers/razorpay.controller.js';
 import { requirePermission } from '../middleware/permissionMiddleware.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 
@@ -13,5 +13,6 @@ router.post('/verify-google-purchase', requirePermission('settings.edit'), async
 // Razorpay: Generate short-lived token for web checkout
 router.post('/checkout-session', requirePermission('settings.edit'), asyncHandler(generateCheckoutToken));
 router.post('/verify-razorpay-sync', requirePermission('settings.edit'), asyncHandler(verifyRazorpaySync));
+router.post('/cancel-razorpay-subscription', requirePermission('settings.edit'), asyncHandler(cancelRazorpaySubscription));
 
 export default router;

@@ -216,3 +216,45 @@ export const verifyRazorpaySync = async (req, res) => {
     res.status(500).json({ success: false, error: 'Internal server error' });
   }
 };
+
+export const cancelRazorpaySubscription = async (req, res) => {
+  try {
+    const businessId = req.business._id;
+    const business = await Business.findById(businessId);
+    
+    if (!business || !business.subscription?.razorpaySubscriptionId) {
+      return res.status(400).json({ success: false, error: 'No active Razorpay subscription found' });
+    }
+
+    const subscriptionId = business.subscription.razorpaySubscriptionId;
+    const rzp = getRazorpayInstance();
+    if (!rzp) {
+      return res.status(500).json({ success: false, error: 'Razorpay is not configured' });
+    }
+
+    // Cancel at the end of the current billing cycle
+    try {
+      // For Razorpay NodeJS SDK, cancel(subscriptionId, cancelAtCycleEnd)
+      await rzp.subscriptions.cancel(subscriptionId, true);
+    } catch (rzpErr) {
+      console.error('Failed to cancel Razorpay subscription:', rzpErr);
+      return res.status(500).json({ success: false, error: 'Failed to cancel subscription with Razorpay' });
+    }
+
+    // Update DB to reflect it will not renew
+    const updatedBusiness = await Business.findByIdAndUpdate(
+      businessId,
+      {
+        $set: {
+          'subscription.cancelAtPeriodEnd': true,
+        }
+      },
+      { new: true }
+    );
+
+    return res.status(200).json({ success: true, business: updatedBusiness, message: 'Subscription will be cancelled at the end of the billing cycle.' });
+  } catch (error) {
+    console.error('Error in cancelRazorpaySubscription:', error);
+    res.status(500).json({ success: false, error: 'Internal server error' });
+  }
+};

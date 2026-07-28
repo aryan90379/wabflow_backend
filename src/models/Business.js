@@ -71,6 +71,8 @@ const businessSchema = new mongoose.Schema(
       appleOriginalTransactionId: { type: String, index: true },
       googlePurchaseToken: { type: String, index: true },
       googleOrderId: { type: String, index: true },
+      razorpaySubscriptionId: { type: String, index: true },
+      cancelAtPeriodEnd: { type: Boolean, default: false },
     },
   },
   { timestamps: true }
