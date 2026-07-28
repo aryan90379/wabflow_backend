@@ -221,9 +221,26 @@ export const cancelRazorpaySubscription = async (req, res) => {
   try {
     const businessId = req.business._id;
     const business = await Business.findById(businessId);
-    
-    if (!business || !business.subscription?.razorpaySubscriptionId) {
-      return res.status(400).json({ success: false, error: 'No active Razorpay subscription found' });
+    if (!business) {
+      return res.status(404).json({ success: false, error: 'Business not found' });
+    }
+
+    if (!business.subscription?.razorpaySubscriptionId) {
+      // No Razorpay ID found. We can't cancel on Razorpay, but we can update our DB to cancel locally.
+      const updatedBusiness = await Business.findByIdAndUpdate(
+        businessId,
+        {
+          $set: {
+            'subscription.cancelAtPeriodEnd': true,
+          }
+        },
+        { new: true }
+      );
+      return res.status(200).json({ 
+        success: true, 
+        business: updatedBusiness, 
+        warning: 'No active Razorpay subscription found to cancel remotely, cancelled locally.' 
+      });
     }
 
     const subscriptionId = business.subscription.razorpaySubscriptionId;
