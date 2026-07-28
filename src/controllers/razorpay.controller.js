@@ -105,7 +105,7 @@ export const verifyWebhook = async (req, res) => {
   try {
     const signature = req.headers['x-razorpay-signature'];
     const webhookSecret = env.razorpayWebhookSecret;
-    const payload = JSON.stringify(req.body);
+    const payload = req.rawBody ? req.rawBody : JSON.stringify(req.body);
 
     console.log(`🔔 [RAZORPAY WEBHOOK] Event type: ${req.body?.event}`);
     console.log(`🔔 [RAZORPAY WEBHOOK] Payload:`, req.body);
@@ -164,6 +164,7 @@ export const verifyRazorpaySync = async (req, res) => {
   try {
     const businessId = req.business._id;
     const userEmail = req.user?.email || '';
+    const { subscriptionId } = req.body || {};
 
     // If it's a test/reviewer account, bypass webhook entirely and instantly upgrade
     if (userEmail.includes('reviewer') || userEmail.includes('test')) {
@@ -178,6 +179,31 @@ export const verifyRazorpaySync = async (req, res) => {
         { new: true }
       );
       return res.status(200).json({ success: true, business: updatedBusiness });
+    }
+
+    if (subscriptionId) {
+      const rzp = getRazorpayInstance();
+      if (rzp) {
+        try {
+          const sub = await rzp.subscriptions.fetch(subscriptionId);
+          if (sub.status === 'active' || sub.status === 'authenticated') {
+            const updatedBusiness = await Business.findByIdAndUpdate(
+              businessId,
+              {
+                $set: {
+                  'subscription.plan': 'starter',
+                  'subscription.validUntil': new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+                  'subscription.razorpaySubscriptionId': subscriptionId,
+                }
+              },
+              { new: true }
+            );
+            return res.status(200).json({ success: true, business: updatedBusiness });
+          }
+        } catch (fetchErr) {
+          console.error('Failed to fetch Razorpay subscription:', fetchErr);
+        }
+      }
     }
 
     // For real users, wait up to 3 seconds for the webhook to have arrived and updated the DB

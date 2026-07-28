@@ -18,7 +18,7 @@ app.use(
   express.json({
     limit: "12mb",
     verify: (req, res, buffer) => {
-      if (req.originalUrl.includes("/webhooks/whatsapp")) {
+      if (req.originalUrl.includes("/webhooks/whatsapp") || req.originalUrl.includes("/webhooks/razorpay")) {
         req.rawBody = Buffer.from(buffer);
       }
     },
