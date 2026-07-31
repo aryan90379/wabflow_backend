@@ -9,6 +9,7 @@ import { broadcastQueue, broadcastWorker } from "./workers/broadcastWorker.js";
 import { bookingReminderQueue } from "./workers/bookingReminderQueue.js";
 import { bookingReminderWorker } from "./workers/bookingReminderWorker.js";
 import { missedCallQueue, missedCallWorker } from "./workers/missedCallWorker.js";
+import { emailWorker } from "./workers/emailWorker.js";
 
 async function start() {
   await connectDatabase();

@@ -211,6 +211,9 @@ apiRouter.put(
   asyncHandler(updateListsTutorialContent)
 );
 
+import { emailRoutes } from "./email.routes.js";
+apiRouter.use("/admin/email", authMiddleware, requireDeveloperAccess, emailRoutes);
+
 // --- Support Tickets (Admin) ---
 // Note: We protect these with authMiddleware. In a real scenario we might add an isAdmin middleware.
 apiRouter.get("/admin/support-tickets", authMiddleware, asyncHandler(adminListTickets));

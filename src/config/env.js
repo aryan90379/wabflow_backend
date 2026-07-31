@@ -37,4 +37,7 @@ export const env = {
   razorpayKeySecret: process.env.RAZORPAY_KEY_SECRET || "",
   razorpayPlanId: process.env.RAZORPAY_PLAN_ID || "",
   razorpayWebhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET || "",
+  awsAccessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
+  awsSecretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
+  awsRegion: process.env.AWS_REGION || "us-east-1",
 };
