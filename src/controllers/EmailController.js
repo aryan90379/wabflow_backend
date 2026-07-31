@@ -167,7 +167,7 @@ export class EmailController {
             bodyText,
             bodyHtml: bodyText,
             folder: 'inbox',
-            status: 'received'
+            status: 'delivered'
           });
 
           console.log(`[Email] Received email from ${from} regarding ${subject}`);
