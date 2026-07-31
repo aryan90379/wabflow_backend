@@ -51,6 +51,7 @@ export const broadcastWorker = new Worker(
           templateId: job.templateId,
           phone: recipient.phone,
           customerName: recipient.customerName,
+          templateVariables: recipient.templateVariables,
         });
 
         recipient.status = "accepted";

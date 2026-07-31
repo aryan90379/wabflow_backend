@@ -8,6 +8,7 @@ const broadcastRecipientSchema = new mongoose.Schema(
     phoneRaw: { type: String, default: "" },
     phone: { type: String, required: true },
     customerName: { type: String, default: "" },
+    templateVariables: { type: [String], default: [] },
     status: {
       type: String,
       enum: ["queued", "sending", "accepted", "sent", "delivered", "read", "failed", "skipped"],

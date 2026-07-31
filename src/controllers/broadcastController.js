@@ -39,6 +39,9 @@ function normalizeRecipientInput(recipients = [], defaultCountryCode = "91") {
     const raw = typeof entry === "string" ? entry : entry?.phone;
     const customerName = typeof entry === "string" ? "" : String(entry?.customerName || entry?.name || "").trim();
     const phone = normalizeBroadcastPhone(raw, defaultCountryCode);
+    const templateVariables = (typeof entry !== "string" && Array.isArray(entry?.templateVariables))
+      ? entry.templateVariables.map(String)
+      : [];
 
     if (!phone) {
       invalid.push({ index, phoneRaw: String(raw || ""), reason: "Invalid phone number" });
@@ -52,6 +55,7 @@ function normalizeRecipientInput(recipients = [], defaultCountryCode = "91") {
       phoneRaw: String(raw || ""),
       phone,
       customerName,
+      templateVariables,
     });
   });
 
@@ -134,18 +138,6 @@ export async function createBroadcast(req, res) {
     return res.status(400).json({
       success: false,
       error: "Campaigns can only use approved Marketing templates. Utility and Authentication templates are not eligible.",
-    });
-  }
-
-  const hasUnmappedParameters =
-    /\{\{\s*\d+\s*\}\}/.test(String(template.body || "")) ||
-    (template.buttons || []).some(
-      (button) => button.type === "URL" && /\{\{\s*\d+\s*\}\}/.test(String(button.url || ""))
-    );
-  if (hasUnmappedParameters) {
-    return res.status(400).json({
-      success: false,
-      error: "This template needs recipient-specific values. Campaign variable mapping is required before it can be sent.",
     });
   }
 
