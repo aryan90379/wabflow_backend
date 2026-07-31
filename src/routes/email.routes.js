@@ -9,5 +9,6 @@ router.post('/bulk', express.text({ type: 'text/csv', limit: '10mb' }), EmailCon
 router.post('/single', express.json(), EmailController.sendSingle);
 router.get('/jobs/:jobId', EmailController.getJobProgress);
 router.get('/', EmailController.getEmails);
+router.delete('/:id', EmailController.deleteEmail);
 
 export const emailRoutes = router;

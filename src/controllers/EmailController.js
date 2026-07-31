@@ -117,6 +117,26 @@ export class EmailController {
     }
   }
 
+  static async deleteEmail(req, res) {
+    try {
+      const { id } = req.params;
+      const { type } = req.query; // 'thread' or 'single'
+      
+      if (type === 'thread') {
+        // Delete all emails in the thread. id can be threadId or messageId
+        await Email.deleteMany({
+          $or: [{ threadId: id }, { messageId: id }]
+        });
+      } else {
+        await Email.findByIdAndDelete(id);
+      }
+      
+      res.status(200).json({ success: true, message: 'Deleted successfully' });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
   static async handleIncomingWebhook(req, res) {
     try {
       const payload = req.body;
