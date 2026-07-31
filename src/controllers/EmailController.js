@@ -112,4 +112,72 @@ export class EmailController {
       res.status(500).json({ error: error.message });
     }
   }
+
+  static async handleIncomingWebhook(req, res) {
+    try {
+      const payload = req.body;
+
+      // Handle AWS SNS Subscription Confirmation
+      if (payload.Type === 'SubscriptionConfirmation' && payload.SubscribeURL) {
+        console.log('AWS SNS SubscriptionConfirmation received, verifying...');
+        const response = await fetch(payload.SubscribeURL);
+        if (response.ok) {
+          console.log('AWS SNS webhook verified successfully.');
+          return res.status(200).send('Verified');
+        } else {
+          return res.status(400).send('Verification failed');
+        }
+      }
+
+      // Handle actual SES Notification
+      if (payload.Type === 'Notification' && payload.Message) {
+        const message = JSON.parse(payload.Message);
+        
+        if (message.notificationType === 'Received' && message.mail) {
+          const mail = message.mail;
+          const headers = mail.commonHeaders || {};
+          const allHeaders = mail.headers || []; // Array of {name, value}
+
+          const from = headers.from ? headers.from.join(', ') : 'unknown@example.com';
+          const to = headers.to || [];
+          const subject = headers.subject || 'No Subject';
+          const messageId = mail.messageId;
+
+          // Attempt to find In-Reply-To to map to a thread
+          const inReplyToHeader = allHeaders.find(h => h.name.toLowerCase() === 'in-reply-to');
+          const inReplyTo = inReplyToHeader ? inReplyToHeader.value.trim().replace(/[<>]/g, '') : null;
+
+          let threadId = null;
+          if (inReplyTo) {
+            // Find the original email we sent that this is replying to
+            const originalEmail = await Email.findOne({ messageId: inReplyTo });
+            if (originalEmail) {
+              threadId = originalEmail.threadId || originalEmail._id;
+            }
+          }
+
+          let bodyText = message.content || 'Incoming email received via AWS SES. (Body extraction requires S3 or Raw config in SES)';
+          
+          await Email.create({
+            messageId,
+            threadId: threadId || messageId, // Use original thread, or start a new one
+            from,
+            to,
+            subject,
+            bodyText,
+            bodyHtml: bodyText,
+            folder: 'inbox',
+            status: 'received'
+          });
+
+          console.log(`[Email] Received email from ${from} regarding ${subject}`);
+        }
+      }
+
+      res.status(200).send('OK');
+    } catch (error) {
+      console.error('SES Webhook Error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  }
 }
