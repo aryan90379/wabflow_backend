@@ -27,7 +27,7 @@ export class EmailController {
   static async uploadBulkCsv(req, res) {
     try {
       const csvString = req.body; // Expecting raw text/csv
-      const { from, subject, bodyTemplateHtml, bodyTemplateText, name } = req.query;
+      const { from, subject, bodyTemplateHtml, bodyTemplateText, name, emailColumn } = req.query;
 
       if (!csvString || typeof csvString !== 'string') {
         return res.status(400).json({ error: 'Invalid CSV data. Send as text/csv or raw text.' });
@@ -56,15 +56,19 @@ export class EmailController {
           text = text.replace(regex, row[key]);
           html = html.replace(regex, row[key]);
         });
+        
+        const toEmail = emailColumn ? row[emailColumn] : (row.email || row.Email);
 
-        await emailQueue.add('send-bulk', {
-          from,
-          to: [row.email || row.Email],
-          subject,
-          bodyText: text,
-          bodyHtml: html,
-          jobId: emailJob._id
-        });
+        if (toEmail) {
+          await emailQueue.add('send-bulk', {
+            from,
+            to: [toEmail],
+            subject,
+            bodyText: text,
+            bodyHtml: html,
+            jobId: emailJob._id
+          });
+        }
       }
 
       res.status(200).json({ success: true, job: emailJob, queuedCount: rows.length });

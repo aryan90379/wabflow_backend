@@ -39,5 +39,5 @@ export const env = {
   razorpayWebhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET || "",
   awsAccessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
   awsSecretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
-  awsRegion: process.env.AWS_REGION || "us-east-1",
+  awsRegion: process.env.AWS_REGION || "ap-south-1",
 };
