@@ -2,7 +2,7 @@ import { Email } from '../models/Email.js';
 import { EmailJob } from '../models/EmailJob.js';
 import { emailQueue } from '../workers/emailQueue.js';
 import { parseCsv } from '../utils/csvParser.js';
-
+import { simpleParser } from 'mailparser';
 export class EmailController {
   static async sendSingle(req, res) {
     try {
@@ -167,7 +167,22 @@ export class EmailController {
           }
         }
 
-        let bodyText = message.content || 'Incoming email received via AWS SES. (Body extraction requires S3 or Raw config in SES)';
+        let bodyText = 'Incoming email received via AWS SES. (Body extraction requires S3 or Raw config in SES)';
+        let bodyHtml = '';
+
+        if (message.content) {
+          try {
+            // AWS SES raw content is base64 encoded
+            const rawMime = Buffer.from(message.content, 'base64');
+            const parsedMail = await simpleParser(rawMime);
+            bodyText = parsedMail.text || bodyText;
+            bodyHtml = parsedMail.html || parsedMail.textAsHtml || bodyText;
+          } catch (err) {
+            console.error('Failed to parse MIME content:', err);
+            bodyText = 'Error parsing incoming email content.';
+            bodyHtml = bodyText;
+          }
+        }
         
         await Email.create({
           messageId,
@@ -176,7 +191,7 @@ export class EmailController {
           to,
           subject,
           bodyText,
-          bodyHtml: bodyText,
+          bodyHtml,
           folder: 'inbox',
           status: 'delivered'
         });
