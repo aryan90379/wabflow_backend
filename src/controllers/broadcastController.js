@@ -134,10 +134,10 @@ export async function createBroadcast(req, res) {
       status: template.status,
     });
   }
-  if (template.category !== "MARKETING") {
+  if (template.category !== "MARKETING" && template.category !== "UTILITY") {
     return res.status(400).json({
       success: false,
-      error: "Campaigns can only use approved Marketing templates. Utility and Authentication templates are not eligible.",
+      error: "Campaigns can only use approved Marketing and Utility templates.",
     });
   }
 
