@@ -172,8 +172,14 @@ export class EmailController {
 
         if (message.content) {
           try {
-            // AWS SES raw content is base64 encoded
-            const rawMime = Buffer.from(message.content, 'base64');
+            // Because we configured AWS SES to send UTF-8, message.content is already a raw MIME string!
+            let rawMime = message.content;
+            
+            // Just in case it WAS set to base64, check if it starts with typical headers
+            if (!rawMime.includes('From:') && !rawMime.includes('Return-Path:') && !rawMime.includes('DKIM-Signature:')) {
+               rawMime = Buffer.from(message.content, 'base64').toString('utf8');
+            }
+
             const parsedMail = await simpleParser(rawMime);
             bodyText = parsedMail.text || bodyText;
             bodyHtml = parsedMail.html || parsedMail.textAsHtml || bodyText;
