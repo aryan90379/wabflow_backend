@@ -97,10 +97,14 @@ export class EmailController {
       
       if (threadId && threadId !== 'undefined') {
         // Fetch specific thread or email by ID
-        filter.$or = [
-          { threadId: threadId },
-          { _id: threadId }
-        ];
+        const orConditions = [{ threadId: threadId }, { messageId: threadId }];
+        
+        // Only query _id if threadId is a valid ObjectId (24 hex chars)
+        if (/^[0-9a-fA-F]{24}$/.test(threadId)) {
+          orConditions.push({ _id: threadId });
+        }
+        
+        filter.$or = orConditions;
       } else if (folder) {
         // Default to folder filter if no threadId
         filter.folder = folder;
