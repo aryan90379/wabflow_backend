@@ -129,49 +129,55 @@ export class EmailController {
         }
       }
 
-      // Handle actual SES Notification
+      // Handle actual SES Notification (Standard SNS Envelope)
+      let message = null;
       if (payload.Type === 'Notification' && payload.Message) {
-        const message = JSON.parse(payload.Message);
-        
-        if (message.notificationType === 'Received' && message.mail) {
-          const mail = message.mail;
-          const headers = mail.commonHeaders || {};
-          const allHeaders = mail.headers || []; // Array of {name, value}
+        try {
+          message = JSON.parse(payload.Message);
+        } catch(e) {}
+      } else if (payload.notificationType === 'Received') {
+        // Handle SNS Raw Message Delivery
+        message = payload;
+      }
+      
+      if (message && message.notificationType === 'Received' && message.mail) {
+        const mail = message.mail;
+        const headers = mail.commonHeaders || {};
+        const allHeaders = mail.headers || []; // Array of {name, value}
 
-          const from = headers.from ? headers.from.join(', ') : 'unknown@example.com';
-          const to = headers.to || [];
-          const subject = headers.subject || 'No Subject';
-          const messageId = mail.messageId;
+        const from = headers.from ? headers.from.join(', ') : 'unknown@example.com';
+        const to = headers.to || [];
+        const subject = headers.subject || 'No Subject';
+        const messageId = mail.messageId;
 
-          // Attempt to find In-Reply-To to map to a thread
-          const inReplyToHeader = allHeaders.find(h => h.name.toLowerCase() === 'in-reply-to');
-          const inReplyTo = inReplyToHeader ? inReplyToHeader.value.trim().replace(/[<>]/g, '') : null;
+        // Attempt to find In-Reply-To to map to a thread
+        const inReplyToHeader = allHeaders.find(h => h.name.toLowerCase() === 'in-reply-to');
+        const inReplyTo = inReplyToHeader ? inReplyToHeader.value.trim().replace(/[<>]/g, '') : null;
 
-          let threadId = null;
-          if (inReplyTo) {
-            // Find the original email we sent that this is replying to
-            const originalEmail = await Email.findOne({ messageId: inReplyTo });
-            if (originalEmail) {
-              threadId = originalEmail.threadId || originalEmail._id;
-            }
+        let threadId = null;
+        if (inReplyTo) {
+          // Find the original email we sent that this is replying to
+          const originalEmail = await Email.findOne({ messageId: inReplyTo });
+          if (originalEmail) {
+            threadId = originalEmail.threadId || originalEmail._id;
           }
-
-          let bodyText = message.content || 'Incoming email received via AWS SES. (Body extraction requires S3 or Raw config in SES)';
-          
-          await Email.create({
-            messageId,
-            threadId: threadId || messageId, // Use original thread, or start a new one
-            from,
-            to,
-            subject,
-            bodyText,
-            bodyHtml: bodyText,
-            folder: 'inbox',
-            status: 'delivered'
-          });
-
-          console.log(`[Email] Received email from ${from} regarding ${subject}`);
         }
+
+        let bodyText = message.content || 'Incoming email received via AWS SES. (Body extraction requires S3 or Raw config in SES)';
+        
+        await Email.create({
+          messageId,
+          threadId: threadId || messageId, // Use original thread, or start a new one
+          from,
+          to,
+          subject,
+          bodyText,
+          bodyHtml: bodyText,
+          folder: 'inbox',
+          status: 'delivered'
+        });
+
+        console.log(`[Email] Received email from ${from} regarding ${subject}`);
       }
 
       res.status(200).send('OK');
