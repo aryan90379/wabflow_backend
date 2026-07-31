@@ -65,3 +65,10 @@ export function broadcastToBusiness(businessId, event, data) {
   console.log(`[socket] Broadcasting ${event} business=${businessId} sockets=${roomSize} id=${entityId}`);
   io.to(room).emit(event, data);
 }
+
+export function broadcastGlobal(event, data) {
+  if (!io) return;
+  io.emit(event, data);
+}
+
+export { io };

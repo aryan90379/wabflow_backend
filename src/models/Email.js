@@ -15,6 +15,16 @@ const emailSchema = new mongoose.Schema(
     status: { type: String, enum: ['pending', 'sent', 'failed', 'delivered', 'bounced', 'complaint'], default: 'pending' },
     jobId: { type: mongoose.Schema.Types.ObjectId, ref: 'EmailJob' }, // If it was part of a bulk job
     error: { type: String },
+    attachments: [
+      {
+        filename: String,
+        url: String,
+        contentType: String,
+        size: Number,
+      }
+    ],
+    opened: { type: Boolean, default: false },
+    openedAt: { type: Date },
   },
   { timestamps: true }
 );
