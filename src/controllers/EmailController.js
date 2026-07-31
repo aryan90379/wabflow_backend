@@ -94,8 +94,17 @@ export class EmailController {
     try {
       const { folder = 'sent', threadId } = req.query;
       const filter = {};
-      if (folder) filter.folder = folder;
-      if (threadId) filter.threadId = threadId;
+      
+      if (threadId && threadId !== 'undefined') {
+        // Fetch specific thread or email by ID
+        filter.$or = [
+          { threadId: threadId },
+          { _id: threadId }
+        ];
+      } else if (folder) {
+        // Default to folder filter if no threadId
+        filter.folder = folder;
+      }
 
       const emails = await Email.find(filter).sort({ createdAt: -1 }).limit(100);
       res.status(200).json({ emails });
