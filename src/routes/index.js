@@ -212,6 +212,13 @@ apiRouter.put(
 );
 
 import { emailRoutes } from "./email.routes.js";
+import { EmailController } from "../controllers/EmailController.js";
+import express from "express";
+
+// Unprotected Webhook route for AWS SNS
+apiRouter.post("/admin/email/incoming", express.json({type: ['application/json', 'text/plain']}), EmailController.handleIncomingWebhook);
+
+// Protected routes
 apiRouter.use("/admin/email", authMiddleware, requireDeveloperAccess, emailRoutes);
 
 // --- Support Tickets (Admin) ---
