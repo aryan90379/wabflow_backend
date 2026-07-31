@@ -10,4 +10,6 @@ router.post('/single', express.json(), EmailController.sendSingle);
 router.get('/jobs/:jobId', EmailController.getJobProgress);
 router.get('/', EmailController.getEmails);
 
+router.post('/incoming', express.json({type: ['application/json', 'text/plain']}), EmailController.handleIncomingWebhook);
+
 export const emailRoutes = router;
