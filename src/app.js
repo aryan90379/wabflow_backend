@@ -25,7 +25,7 @@ app.use(
   })
 );
 app.use(express.urlencoded({ extended: true, limit: "12mb" }));
-app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
+// app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 
 // Serve static downloads (e.g. APK files)
 import path from "path";

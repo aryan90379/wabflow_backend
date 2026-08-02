@@ -40,6 +40,13 @@ async function processStatus(event) {
     broadcastRawToBusiness(String(message.businessId), "new_message", messagePayload);
   }
 
+  if (event.status === "failed") {
+    console.error(`\n❌ [WEBHOOK FAILED] Message ${event.messageId} failed!`);
+    console.error(`   Errors array:`, event.errors);
+    console.error(`   Raw webhook event:`, JSON.stringify(event.raw, null, 2));
+    console.error(`\n`);
+  }
+
   const recipient = await BroadcastRecipient.findOneAndUpdate(
     { whatsappMessageId: event.messageId },
     {
@@ -50,7 +57,7 @@ async function processStatus(event) {
           : {}),
         ...(event.errors?.length
           ? { error: event.errors.map(item => item?.message || item?.title || String(item)).join(", ") }
-          : {}),
+          : (event.status === "failed" ? { error: `Message failed to deliver. Raw webhook: ${JSON.stringify(event.raw || "No raw data")}` } : {})),
       },
     },
     { new: true }
