@@ -50,7 +50,7 @@ async function processStatus(event) {
           : {}),
         ...(event.errors?.length
           ? { error: event.errors.map(item => item?.message || item?.title || String(item)).join(", ") }
-          : { error: "" }),
+          : {}),
       },
     },
     { new: true }
