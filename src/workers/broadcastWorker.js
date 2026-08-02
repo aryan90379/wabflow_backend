@@ -54,12 +54,17 @@ export const broadcastWorker = new Worker(
           templateVariables: recipient.templateVariables,
         });
 
+        console.error(`\n✅ [WORKER SUCCESS] Recipient ${recipient.phone} accepted! MsgID: ${result.message?.whatsappMessageId}\n`);
         recipient.status = "accepted";
         recipient.conversationId = result.conversation?._id || result.conversation?.id;
         recipient.messageId = result.message?._id || result.message?.id;
         recipient.whatsappMessageId = result.message?.whatsappMessageId || "";
         await recipient.save();
       } catch (error) {
+        console.error(`\n❌ [WORKER FAILED] Recipient ${recipient.phone} failed synchronously!`);
+        console.error(`   Error Message: ${error.message}`);
+        console.error(`   Meta Details:`, error.meta);
+        console.error(`\n`);
         recipient.status = "failed";
         recipient.error = error?.meta?.message || error.message || "Could not send template.";
         await recipient.save();
