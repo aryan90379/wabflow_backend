@@ -608,35 +608,16 @@ async function sendRoomDetail({ business, room, account, contact, conversation, 
   const price = room.price !== null && room.price !== undefined ? `\nPrice: ${room.currency || "INR"} ${room.price}` : "";
   const details = `${room.name}\n${room.description || ""}${price}`.trim();
 
-  if (room.images && room.images.length > 0) {
-    // Send all images sequentially to avoid DB VersionError from concurrent saves
-    for (const imgUrl of room.images) {
-      await sendAndSaveMessage({
-        account,
-        contact,
-        conversation,
-        response: { type: "image", text: "", mediaUrl: imgUrl },
-        senderType: "bot",
-      });
-    }
-    // Send the details as a separate text message immediately after
-    await sendAndSaveMessage({
-      account,
-      contact,
-      conversation,
-      response: { type: "text", text: details },
-      senderType: "bot",
-    });
-  } else {
-    await sendAndSaveMessage({
-      account,
-      contact,
-      conversation,
-      response: { type: "text", text: details },
-      senderType: "bot",
-    });
-  }
+  // Send the details as a text message first
+  await sendAndSaveMessage({
+    account,
+    contact,
+    conversation,
+    response: { type: "text", text: details },
+    senderType: "bot",
+  });
 
+  // Send the interactive booking button
   await handleSendBookingMetaFlow({
     business,
     account,
@@ -647,6 +628,20 @@ async function sendRoomDetail({ business, room, account, contact, conversation, 
     includeSelectedRoomInFlow: false,
     messageText: `Would you like to book ${room.name}?`,
   });
+
+  // Blast all images at the very end. Since no text follows them, WhatsApp can group them into a collage!
+  if (room.images && room.images.length > 0) {
+    for (const imgUrl of room.images) {
+      await sendAndSaveMessage({
+        account,
+        contact,
+        conversation,
+        response: { type: "image", text: "", mediaUrl: imgUrl },
+        senderType: "bot",
+      });
+    }
+  }
+
   conversation.botState.variables.set("serviceItemId", String(room._id));
   conversation.botState.variables.set("roomType", room.name);
   conversation.botState.updatedAt = new Date();
@@ -1084,8 +1079,18 @@ export async function processIncomingMessage(event) {
         const price = service.price !== null && service.price !== undefined ? `\nPrice: ${service.currency || "INR"} ${service.price}` : "";
         const duration = service.durationMinutes ? `\nDuration: ${service.durationMinutes} minutes` : "";
         const reply = `${service.name}\n${service.description || ""}${price}${duration}`.trim();
+        
+        // Send the details as a text message first
+        await sendAndSaveMessage({
+          account,
+          contact,
+          conversation,
+          response: { type: "text", text: reply },
+          senderType: "bot",
+        });
+
+        // Blast all images at the very end for collage grouping
         if (service.images && service.images.length > 0) {
-          // Send all images sequentially
           for (const imgUrl of service.images) {
             await sendAndSaveMessage({
               account,
@@ -1095,23 +1100,8 @@ export async function processIncomingMessage(event) {
               senderType: "bot",
             });
           }
-          // Send the details as a separate text message immediately after
-          await sendAndSaveMessage({
-            account,
-            contact,
-            conversation,
-            response: { type: "text", text: reply },
-            senderType: "bot",
-          });
-        } else {
-          await sendAndSaveMessage({
-            account,
-            contact,
-            conversation,
-            response: { type: "text", text: reply },
-            senderType: "bot",
-          });
         }
+        
         conversation.botState.updatedAt = new Date();
         await conversation.save();
         await writeDecision({
