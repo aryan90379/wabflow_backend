@@ -609,16 +609,26 @@ async function sendRoomDetail({ business, room, account, contact, conversation, 
   const details = `${room.name}\n${room.description || ""}${price}`.trim();
 
   if (room.images && room.images.length > 0) {
-    for (let i = 0; i < room.images.length; i++) {
-      const isLast = i === room.images.length - 1;
-      await sendAndSaveMessage({
-        account,
-        contact,
-        conversation,
-        response: { type: "image", text: isLast ? details : "", mediaUrl: room.images[i] },
-        senderType: "bot",
-      });
-    }
+    // Send all images concurrently without captions so WhatsApp groups them into a collage
+    await Promise.all(
+      room.images.map((imgUrl) =>
+        sendAndSaveMessage({
+          account,
+          contact,
+          conversation,
+          response: { type: "image", text: "", mediaUrl: imgUrl },
+          senderType: "bot",
+        })
+      )
+    );
+    // Send the details as a separate text message immediately after
+    await sendAndSaveMessage({
+      account,
+      contact,
+      conversation,
+      response: { type: "text", text: details },
+      senderType: "bot",
+    });
   } else {
     await sendAndSaveMessage({
       account,
@@ -1077,16 +1087,26 @@ export async function processIncomingMessage(event) {
         const duration = service.durationMinutes ? `\nDuration: ${service.durationMinutes} minutes` : "";
         const reply = `${service.name}\n${service.description || ""}${price}${duration}`.trim();
         if (service.images && service.images.length > 0) {
-          for (let i = 0; i < service.images.length; i++) {
-            const isLast = i === service.images.length - 1;
-            await sendAndSaveMessage({
-              account,
-              contact,
-              conversation,
-              response: { type: "image", text: isLast ? reply : "", mediaUrl: service.images[i] },
-              senderType: "bot",
-            });
-          }
+          // Send all images concurrently without captions for collage grouping
+          await Promise.all(
+            service.images.map((imgUrl) =>
+              sendAndSaveMessage({
+                account,
+                contact,
+                conversation,
+                response: { type: "image", text: "", mediaUrl: imgUrl },
+                senderType: "bot",
+              })
+            )
+          );
+          // Send the details as a separate text message immediately after
+          await sendAndSaveMessage({
+            account,
+            contact,
+            conversation,
+            response: { type: "text", text: reply },
+            senderType: "bot",
+          });
         } else {
           await sendAndSaveMessage({
             account,
