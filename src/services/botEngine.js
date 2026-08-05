@@ -608,15 +608,26 @@ async function sendRoomDetail({ business, room, account, contact, conversation, 
   const price = room.price !== null && room.price !== undefined ? `\nPrice: ${room.currency || "INR"} ${room.price}` : "";
   const details = `${room.name}\n${room.description || ""}${price}`.trim();
 
-  await sendAndSaveMessage({
-    account,
-    contact,
-    conversation,
-    response: room.images?.[0]
-      ? { type: "image", text: details, mediaUrl: room.images[0] }
-      : { type: "text", text: details },
-    senderType: "bot",
-  });
+  if (room.images && room.images.length > 0) {
+    for (let i = 0; i < room.images.length; i++) {
+      const isLast = i === room.images.length - 1;
+      await sendAndSaveMessage({
+        account,
+        contact,
+        conversation,
+        response: { type: "image", text: isLast ? details : "", mediaUrl: room.images[i] },
+        senderType: "bot",
+      });
+    }
+  } else {
+    await sendAndSaveMessage({
+      account,
+      contact,
+      conversation,
+      response: { type: "text", text: details },
+      senderType: "bot",
+    });
+  }
 
   await handleSendBookingMetaFlow({
     business,
@@ -1065,15 +1076,26 @@ export async function processIncomingMessage(event) {
         const price = service.price !== null && service.price !== undefined ? `\nPrice: ${service.currency || "INR"} ${service.price}` : "";
         const duration = service.durationMinutes ? `\nDuration: ${service.durationMinutes} minutes` : "";
         const reply = `${service.name}\n${service.description || ""}${price}${duration}`.trim();
-        await sendAndSaveMessage({
-          account,
-          contact,
-          conversation,
-          response: service.images?.[0]
-            ? { type: "image", text: reply, mediaUrl: service.images[0] }
-            : { type: "text", text: reply },
-          senderType: "bot",
-        });
+        if (service.images && service.images.length > 0) {
+          for (let i = 0; i < service.images.length; i++) {
+            const isLast = i === service.images.length - 1;
+            await sendAndSaveMessage({
+              account,
+              contact,
+              conversation,
+              response: { type: "image", text: isLast ? reply : "", mediaUrl: service.images[i] },
+              senderType: "bot",
+            });
+          }
+        } else {
+          await sendAndSaveMessage({
+            account,
+            contact,
+            conversation,
+            response: { type: "text", text: reply },
+            senderType: "bot",
+          });
+        }
         conversation.botState.updatedAt = new Date();
         await conversation.save();
         await writeDecision({
