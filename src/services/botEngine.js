@@ -609,18 +609,16 @@ async function sendRoomDetail({ business, room, account, contact, conversation, 
   const details = `${room.name}\n${room.description || ""}${price}`.trim();
 
   if (room.images && room.images.length > 0) {
-    // Send all images concurrently without captions so WhatsApp groups them into a collage
-    await Promise.all(
-      room.images.map((imgUrl) =>
-        sendAndSaveMessage({
-          account,
-          contact,
-          conversation,
-          response: { type: "image", text: "", mediaUrl: imgUrl },
-          senderType: "bot",
-        })
-      )
-    );
+    // Send all images sequentially to avoid DB VersionError from concurrent saves
+    for (const imgUrl of room.images) {
+      await sendAndSaveMessage({
+        account,
+        contact,
+        conversation,
+        response: { type: "image", text: "", mediaUrl: imgUrl },
+        senderType: "bot",
+      });
+    }
     // Send the details as a separate text message immediately after
     await sendAndSaveMessage({
       account,
@@ -1087,18 +1085,16 @@ export async function processIncomingMessage(event) {
         const duration = service.durationMinutes ? `\nDuration: ${service.durationMinutes} minutes` : "";
         const reply = `${service.name}\n${service.description || ""}${price}${duration}`.trim();
         if (service.images && service.images.length > 0) {
-          // Send all images concurrently without captions for collage grouping
-          await Promise.all(
-            service.images.map((imgUrl) =>
-              sendAndSaveMessage({
-                account,
-                contact,
-                conversation,
-                response: { type: "image", text: "", mediaUrl: imgUrl },
-                senderType: "bot",
-              })
-            )
-          );
+          // Send all images sequentially
+          for (const imgUrl of service.images) {
+            await sendAndSaveMessage({
+              account,
+              contact,
+              conversation,
+              response: { type: "image", text: "", mediaUrl: imgUrl },
+              senderType: "bot",
+            });
+          }
           // Send the details as a separate text message immediately after
           await sendAndSaveMessage({
             account,
