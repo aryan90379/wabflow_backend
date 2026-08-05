@@ -5,6 +5,7 @@ import {
   Booking,
   Contact,
   Conversation,
+  ServiceItem,
 } from "../models/index.js";
 import { ListItem } from "../models/ListItem.js";
 import { interpolate, normalizeText } from "../utils/text.js";
