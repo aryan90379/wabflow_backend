@@ -316,6 +316,16 @@ export class EmailController {
             statusUpdate = 'rejected';
           } else if (eventType === 'Open') {
             incQuery.opens = 1;
+          } else if (eventType === 'Send') {
+            incQuery.sends = 1;
+          } else if (eventType === 'Rendering Failure') {
+            incQuery.renderingFailures = 1;
+          } else if (eventType === 'DeliveryDelay') {
+            incQuery.deliveryDelays = 1;
+          } else if (eventType === 'Subscription') {
+            incQuery.subscriptions = 1;
+          } else if (eventType === 'Click') {
+            incQuery.clicks = 1;
           }
 
           if (Object.keys(incQuery).length > 0) {
