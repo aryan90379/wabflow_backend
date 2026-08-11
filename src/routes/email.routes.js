@@ -7,7 +7,9 @@ const router = express.Router();
 router.post('/bulk', express.text({ type: 'text/csv', limit: '10mb' }), EmailController.uploadBulkCsv);
 
 router.post('/single', express.json(), EmailController.sendSingle);
+router.get('/jobs', EmailController.getJobs);
 router.get('/jobs/:jobId', EmailController.getJobProgress);
+router.get('/jobs/:jobId/analytics', EmailController.getCampaignAnalytics);
 router.get('/track/:id', EmailController.trackOpen);
 router.get('/', EmailController.getEmails);
 router.delete('/:id', EmailController.deleteEmail);

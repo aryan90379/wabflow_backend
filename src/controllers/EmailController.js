@@ -1,5 +1,6 @@
 import { Email } from '../models/Email.js';
 import { EmailJob } from '../models/EmailJob.js';
+import { EmailEvent } from '../models/EmailEvent.js';
 import { emailQueue } from '../workers/emailQueue.js';
 import { parseCsv } from '../utils/csvParser.js';
 import { simpleParser } from 'mailparser';
@@ -114,6 +115,54 @@ export class EmailController {
     }
   }
 
+  static async getCampaignAnalytics(req, res) {
+    try {
+      const { jobId } = req.params;
+      const job = await EmailJob.findById(jobId);
+      if (!job) return res.status(404).json({ error: 'Job not found' });
+      
+      // Calculate derived metrics
+      const sent = job.sentEmails || 0;
+      const delivered = job.totalDelivered || 0;
+      const bounced = job.totalBounces || 0;
+      const complaints = job.complaints || 0;
+
+      const deliveryRate = sent > 0 ? ((delivered / sent) * 100).toFixed(2) : 0;
+      const bounceRate = sent > 0 ? ((bounced / sent) * 100).toFixed(2) : 0;
+      const complaintRate = delivered > 0 ? ((complaints / delivered) * 100).toFixed(2) : 0;
+
+      res.status(200).json({ 
+        job,
+        analytics: {
+          deliveryRate: parseFloat(deliveryRate),
+          bounceRate: parseFloat(bounceRate),
+          complaintRate: parseFloat(complaintRate)
+        }
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
+  static async getJobs(req, res) {
+    try {
+      const { page = 1, limit = 20 } = req.query;
+      const skip = (parseInt(page) - 1) * parseInt(limit);
+      
+      const jobs = await EmailJob.find()
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit));
+        
+      const totalCount = await EmailJob.countDocuments();
+      const hasNextPage = skip + jobs.length < totalCount;
+
+      res.status(200).json({ jobs, totalCount, hasNextPage });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
   static async getEmails(req, res) {
     try {
       const { folder = 'sent', threadId, search, page = 1, limit = 50 } = req.query;
@@ -196,12 +245,104 @@ export class EmailController {
         try {
           message = JSON.parse(payload.Message);
         } catch(e) {}
-      } else if (payload.notificationType === 'Received') {
-        // Handle SNS Raw Message Delivery
+      } else {
         message = payload;
       }
       
-      if (message && message.notificationType === 'Received' && message.mail) {
+      if (!message) {
+        return res.status(200).send('Ignored');
+      }
+
+      // --- SES EVENT PUBLISHING (Deliveries, Bounces, Complaints, etc.) ---
+      if (message.eventType) {
+        const snsMessageId = payload.MessageId || message.mail?.messageId + '-' + message.eventType; // Fallback
+        const eventType = message.eventType;
+        const messageId = message.mail?.messageId;
+        
+        // Idempotency Check
+        const existingEvent = await EmailEvent.findOne({ snsMessageId });
+        if (existingEvent) {
+          console.log(`[Email Webhook] Skipping duplicate SES event: ${snsMessageId}`);
+          return res.status(200).send('Duplicate');
+        }
+
+        const originalEmail = await Email.findOne({ messageId });
+        if (!originalEmail) {
+          console.log(`[Email Webhook] Original email not found for messageId: ${messageId}`);
+          // We can still record the event even if the email is missing
+          await EmailEvent.create({
+            snsMessageId,
+            messageId,
+            eventType,
+            rawPayload: message
+          });
+          return res.status(200).send('OK');
+        }
+
+        const jobId = originalEmail.jobId;
+        const recipient = message.mail?.destination?.[0] || 'unknown';
+
+        await EmailEvent.create({
+          snsMessageId,
+          messageId,
+          eventType,
+          jobId,
+          emailId: originalEmail._id,
+          recipient,
+          rawPayload: message
+        });
+
+        // Update Job Metrics & Email Status
+        if (jobId) {
+          const incQuery = {};
+          let statusUpdate = null;
+
+          if (eventType === 'Delivery') {
+            incQuery.totalDelivered = 1;
+            statusUpdate = 'delivered';
+          } else if (eventType === 'Bounce') {
+            incQuery.totalBounces = 1;
+            statusUpdate = 'bounced';
+            if (message.bounce?.bounceType === 'Permanent') {
+              incQuery.hardBounces = 1;
+            } else {
+              incQuery.softBounces = 1;
+            }
+          } else if (eventType === 'Complaint') {
+            incQuery.complaints = 1;
+            statusUpdate = 'complaint';
+          } else if (eventType === 'Reject') {
+            incQuery.rejected = 1;
+            statusUpdate = 'rejected';
+          } else if (eventType === 'Open') {
+            incQuery.opens = 1;
+          }
+
+          if (Object.keys(incQuery).length > 0) {
+            await EmailJob.updateOne({ _id: jobId }, { $inc: incQuery });
+          }
+          if (statusUpdate) {
+            await Email.updateOne({ _id: originalEmail._id }, { status: statusUpdate });
+          }
+        } else {
+          // Update Email status even if not part of a job
+          let statusUpdate = null;
+          if (eventType === 'Delivery') statusUpdate = 'delivered';
+          else if (eventType === 'Bounce') statusUpdate = 'bounced';
+          else if (eventType === 'Complaint') statusUpdate = 'complaint';
+          else if (eventType === 'Reject') statusUpdate = 'rejected';
+          
+          if (statusUpdate) {
+            await Email.updateOne({ _id: originalEmail._id }, { status: statusUpdate });
+          }
+        }
+
+        console.log(`[Email Webhook] Processed SES event ${eventType} for ${messageId}`);
+        return res.status(200).send('OK');
+      }
+
+      // --- INCOMING RAW EMAIL RECEIPT (e.g. Replies) ---
+      if (message.notificationType === 'Received' && message.mail) {
         const mail = message.mail;
         const headers = mail.commonHeaders || {};
         const allHeaders = mail.headers || []; // Array of {name, value}
@@ -216,11 +357,18 @@ export class EmailController {
         const inReplyTo = inReplyToHeader ? inReplyToHeader.value.trim().replace(/[<>]/g, '') : null;
 
         let threadId = null;
+        let jobId = null;
         if (inReplyTo) {
           // Find the original email we sent that this is replying to
           const originalEmail = await Email.findOne({ messageId: inReplyTo });
           if (originalEmail) {
             threadId = originalEmail.threadId || originalEmail._id;
+            jobId = originalEmail.jobId;
+            
+            // Track reply in job metrics
+            if (jobId) {
+              await EmailJob.updateOne({ _id: jobId }, { $inc: { replies: 1 } });
+            }
           }
         }
 

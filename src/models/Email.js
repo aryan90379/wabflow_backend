@@ -12,7 +12,7 @@ const emailSchema = new mongoose.Schema(
     bodyText: { type: String },
     bodyHtml: { type: String },
     folder: { type: String, enum: ['inbox', 'sent', 'draft', 'trash'], default: 'sent' },
-    status: { type: String, enum: ['pending', 'sent', 'failed', 'delivered', 'bounced', 'complaint'], default: 'pending' },
+    status: { type: String, enum: ['pending', 'sent', 'failed', 'delivered', 'bounced', 'complaint', 'rejected'], default: 'pending' },
     jobId: { type: mongoose.Schema.Types.ObjectId, ref: 'EmailJob' }, // If it was part of a bulk job
     error: { type: String },
     attachments: [
