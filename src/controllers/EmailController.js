@@ -52,7 +52,7 @@ export class EmailController {
   static async uploadBulkCsv(req, res) {
     try {
       const csvString = req.body; // Expecting raw text/csv
-      const { from, subject, bodyTemplateHtml, bodyTemplateText, name, emailColumn } = req.query;
+      const { from, subject, bodyTemplateHtml, bodyTemplateText, name, emailColumn, scheduledFor } = req.query;
 
       if (!csvString || typeof csvString !== 'string') {
         return res.status(400).json({ error: 'Invalid CSV data. Send as text/csv or raw text.' });
@@ -63,9 +63,24 @@ export class EmailController {
         return res.status(400).json({ error: 'Empty CSV or invalid format.' });
       }
 
+      let delay = 0;
+      let isScheduled = false;
+      let status = 'processing';
+      let scheduleDate = null;
+      
+      if (scheduledFor) {
+        scheduleDate = new Date(scheduledFor);
+        if (scheduleDate.getTime() > Date.now()) {
+          delay = scheduleDate.getTime() - Date.now();
+          isScheduled = true;
+          status = 'scheduled';
+        }
+      }
+
       const emailJob = await EmailJob.create({
         name: name || `Bulk Campaign - ${new Date().toISOString()}`,
-        status: 'processing',
+        status,
+        scheduledFor: isScheduled ? scheduleDate : undefined,
         totalEmails: rows.length,
         createdBy: req.user?._id || 'admin'
       });
@@ -92,11 +107,11 @@ export class EmailController {
             bodyText: text,
             bodyHtml: html,
             jobId: emailJob._id
-          });
+          }, { delay: delay > 0 ? delay : undefined });
         }
       }
 
-      res.status(200).json({ success: true, job: emailJob, queuedCount: rows.length });
+      res.status(200).json({ success: true, job: emailJob, queuedCount: rows.length, isScheduled });
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: error.message });

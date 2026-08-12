@@ -3,7 +3,8 @@ import mongoose from 'mongoose';
 const emailJobSchema = new mongoose.Schema(
   {
     name: { type: String, required: true }, // e.g., 'Bulk Campaign - 2026-07-31'
-    status: { type: String, enum: ['queued', 'processing', 'completed', 'failed'], default: 'queued' },
+    status: { type: String, enum: ['queued', 'scheduled', 'processing', 'completed', 'failed'], default: 'queued' },
+    scheduledFor: { type: Date },
     totalEmails: { type: Number, default: 0 },
     sentEmails: { type: Number, default: 0 },
     failedEmails: { type: Number, default: 0 },

@@ -11,6 +11,7 @@ export function parseCsv(csvString) {
     const obj = {};
     headers.forEach((header, index) => {
       obj[header] = values[index] || '';
+      obj[String(index + 1)] = values[index] || ''; // Allow referencing by 1-based index e.g. {{1}}
     });
     results.push(obj);
   }
