@@ -118,6 +118,44 @@ export class EmailController {
     }
   }
 
+  static async rescheduleCampaign(req, res) {
+    try {
+      const { jobId } = req.params;
+      const { scheduledFor } = req.body;
+
+      if (!scheduledFor) return res.status(400).json({ error: 'Missing scheduled date' });
+
+      const emailJob = await EmailJob.findById(jobId);
+      if (!emailJob) return res.status(404).json({ error: 'Job not found' });
+      if (emailJob.status !== 'scheduled') {
+        return res.status(400).json({ error: 'Can only reschedule campaigns with status scheduled' });
+      }
+
+      const newDate = new Date(scheduledFor);
+      const delay = newDate.getTime() - Date.now();
+      
+      if (delay <= 0) {
+        return res.status(400).json({ error: 'Scheduled time must be in the future.' });
+      }
+
+      emailJob.scheduledFor = newDate;
+      await emailJob.save();
+
+      // Update delay in bullmq
+      const delayedJobs = await emailQueue.getDelayed();
+      for (const job of delayedJobs) {
+        if (job.data.jobId === jobId) {
+          await job.changeDelay(delay);
+        }
+      }
+
+      res.status(200).json({ success: true, message: 'Rescheduled successfully', job: emailJob });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: error.message });
+    }
+  }
+
   static async getJobProgress(req, res) {
     try {
       const { jobId } = req.params;

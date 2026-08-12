@@ -10,6 +10,7 @@ router.post('/single', express.json(), EmailController.sendSingle);
 router.get('/jobs', EmailController.getJobs);
 router.get('/jobs/:jobId', EmailController.getJobProgress);
 router.get('/jobs/:jobId/analytics', EmailController.getCampaignAnalytics);
+router.put('/jobs/:jobId/reschedule', express.json(), EmailController.rescheduleCampaign);
 router.get('/track/:id', EmailController.trackOpen);
 router.get('/', EmailController.getEmails);
 router.delete('/:id', EmailController.deleteEmail);
