@@ -51,17 +51,43 @@ export class EmailController {
 
   static async uploadBulkCsv(req, res) {
     try {
-      const csvString = req.body; // Expecting raw text/csv
-      const { from, subject, bodyTemplateHtml, bodyTemplateText, name, emailColumn, scheduledFor } = req.query;
+      let csvString = req.body; // Expecting raw text/csv
+      const { from, subject, bodyTemplateHtml, bodyTemplateText, name, emailColumn, scheduledFor, sheetUrl, startRow, endRow } = req.query;
+
+      if (sheetUrl) {
+        // Extract Sheet ID
+        const match = sheetUrl.match(/\/d\/([a-zA-Z0-9-_]+)/);
+        if (match && match[1]) {
+          const sheetId = match[1];
+          // Look for gid if present
+          let gid = '0';
+          const gidMatch = sheetUrl.match(/[#&]gid=([0-9]+)/);
+          if (gidMatch && gidMatch[1]) gid = gidMatch[1];
+          
+          const exportUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
+          const response = await fetch(exportUrl);
+          if (!response.ok) {
+            return res.status(400).json({ error: 'Failed to download Google Sheet. Ensure it is set to "Anyone with the link can view".' });
+          }
+          csvString = await response.text();
+        } else {
+          return res.status(400).json({ error: 'Invalid Google Sheet URL format.' });
+        }
+      }
 
       if (!csvString || typeof csvString !== 'string') {
-        return res.status(400).json({ error: 'Invalid CSV data. Send as text/csv or raw text.' });
+        return res.status(400).json({ error: 'Invalid CSV data. Send as text/csv, raw text, or provide a valid sheetUrl.' });
       }
 
-      const rows = parseCsv(csvString);
-      if (rows.length === 0) {
+      const allRows = parseCsv(csvString);
+      if (allRows.length === 0) {
         return res.status(400).json({ error: 'Empty CSV or invalid format.' });
       }
+      
+      const sRow = startRow ? Math.max(1, parseInt(startRow)) : 1;
+      const eRow = endRow ? parseInt(endRow) : allRows.length;
+      
+      const rows = allRows.slice(sRow - 1, eRow);
 
       let delay = 0;
       let isScheduled = false;
@@ -92,9 +118,8 @@ export class EmailController {
         
         // Basic templating
         Object.keys(row).forEach(key => {
-          const regex = new RegExp(`{{${key}}}`, 'g');
-          text = text.replace(regex, row[key]);
-          html = html.replace(regex, row[key]);
+          text = text.replaceAll(`{{${key}}}`, row[key]);
+          html = html.replaceAll(`{{${key}}}`, row[key]);
         });
         
         const toEmail = emailColumn ? row[emailColumn] : (row.email || row.Email);
