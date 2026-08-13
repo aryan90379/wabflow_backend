@@ -8,6 +8,7 @@ import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { env } from '../config/env.js';
 import { broadcastGlobal } from '../services/socketService.js';
 import crypto from 'crypto';
+import mongoose from 'mongoose';
 
 const s3Client = new S3Client({
   region: env.awsRegion,
